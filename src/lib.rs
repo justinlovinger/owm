@@ -1,5 +1,12 @@
+mod binary;
+mod encoding;
+mod objective;
 mod protocol;
 
+use encoding::Decoder;
+use ndarray::Axis;
+use objective::{evaluate, Size};
+use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 use protocol::river_layout_v3;
 use wayland_client::{
     backend::ObjectId,
@@ -111,13 +118,32 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 tags: _,
                 serial,
             } => {
-                // This is a placeholder:
-                for x in 0..view_count {
+                // If this takes more than a few milliseconds,
+                // River will ignore the result,
+                // see <https://github.com/riverwm/river/issues/867>.
+                let decoder = Decoder::new(16, usable_width as usize, usable_height as usize);
+                let usable_size = Size {
+                    width: decoder.width(),
+                    height: decoder.height(),
+                };
+                let windows = decoder.decode1(
+                    UntilConvergedConfig::default()
+                        .argmin(&mut Config::start_default_for(
+                            decoder.bits_per_window() * view_count as usize,
+                            |points| {
+                                decoder.decode(points).map_axis(Axis(1), |windows| {
+                                    evaluate(usable_size, windows.as_slice().unwrap())
+                                })
+                            },
+                        ))
+                        .view(),
+                );
+                for window in windows {
                     proxy.push_view_dimensions(
-                        x as i32 * 100,
-                        x as i32 * 100,
-                        usable_width / (view_count + 1),
-                        usable_height / (view_count + 1),
+                        window.pos.x as i32,
+                        window.pos.y as i32,
+                        window.size.width as u32,
+                        window.size.height as u32,
                         serial,
                     );
                 }

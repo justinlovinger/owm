@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+itertools = "0.11.0"
+ndarray = "0.15.6"
+num-traits = "0.2.16"
+optimal = { git = "https://github.com/justinlovinger/optimal-rs.git" }
 wayland-client = "0.30.2"
 wayland-scanner = "0.30.1"
