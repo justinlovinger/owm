@@ -10,23 +10,21 @@ pub struct Decoder {
     bits_per_num: usize,
     width: usize,
     height: usize,
+    num_windows: usize,
 }
 
 impl Decoder {
-    pub fn new(bits_per_num: usize, width: usize, height: usize) -> Self {
+    pub fn new(bits_per_num: usize, width: usize, height: usize, num_windows: usize) -> Self {
         Self {
             bits_per_num,
             width,
             height,
+            num_windows,
         }
     }
 
-    pub fn bits_per_window(&self) -> usize {
-        4 * self.bits_per_num()
-    }
-
-    pub fn bits_per_num(&self) -> usize {
-        self.bits_per_num
+    pub fn bits(&self) -> usize {
+        4 * self.bits_per_num * self.num_windows
     }
 
     pub fn width(&self) -> usize {
