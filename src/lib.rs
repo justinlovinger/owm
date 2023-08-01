@@ -2,13 +2,14 @@ mod binary;
 mod encoding;
 mod objective;
 
+use cached::proc_macro::cached;
 use encoding::Decoder;
 use ndarray::Axis;
 use objective::{evaluate, Size, Window};
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 
-pub fn layout(width: usize, height: usize, count: usize) -> impl Iterator<Item = Window> {
-    let decoder = Decoder::new(16, width, height);
+#[cached(sync_writes = true)]
+pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
     let decoder = Decoder::new(16, width, height, count);
     let size = Size {
         width: decoder.width(),
