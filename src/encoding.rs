@@ -2,37 +2,28 @@ use ndarray::prelude::*;
 
 use crate::{
     binary::reversed_bits_to_fracs,
-    objective::{Pos, Size, Window},
+    post_processing::trim_off_screen,
+    types::{Pos, Size, Window},
 };
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
     bits_per_num: usize,
-    width: usize,
-    height: usize,
+    container: Size,
     num_windows: usize,
 }
 
 impl Decoder {
-    pub fn new(bits_per_num: usize, width: usize, height: usize, num_windows: usize) -> Self {
+    pub fn new(bits_per_num: usize, container: Size, num_windows: usize) -> Self {
         Self {
             bits_per_num,
-            width,
-            height,
+            container,
             num_windows,
         }
     }
 
     pub fn bits(&self) -> usize {
         4 * self.bits_per_num * self.num_windows
-    }
-
-    pub fn width(&self) -> usize {
-        self.width
-    }
-
-    pub fn height(&self) -> usize {
-        self.height
     }
 
     pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Window> {
@@ -43,12 +34,12 @@ impl Decoder {
     }
 
     pub fn decode(&self, bits: ArrayView2<bool>) -> Array2<Window> {
-        reversed_bits_to_fracs(
+        let mut windows = reversed_bits_to_fracs(
             [
-                0.0..=(self.width - 1) as f64,
-                0.0..=(self.height - 1) as f64,
-                1.0..=self.width as f64,
-                1.0..=self.height as f64,
+                0.0..=(self.container.width - 1) as f64,
+                0.0..=(self.container.height - 1) as f64,
+                1.0..=self.container.width as f64,
+                1.0..=self.container.height as f64,
             ],
             bits.into_shape((
                 bits.nrows(),
@@ -67,6 +58,10 @@ impl Decoder {
                 width: xs[2].round() as usize,
                 height: xs[3].round() as usize,
             },
-        })
+        });
+        for mut windows in windows.axis_iter_mut(Axis(0)) {
+            trim_off_screen(self.container, windows.view_mut());
+        }
+        windows
     }
 }

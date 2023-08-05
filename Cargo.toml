@@ -11,3 +11,7 @@ num-traits = "0.2.16"
 optimal = { git = "https://github.com/justinlovinger/optimal-rs.git" }
 wayland-client = "0.30.2"
 wayland-scanner = "0.30.1"
+
+[dev-dependencies]
+proptest = "1.2.0"
+test-strategy = "0.3.1"
