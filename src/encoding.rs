@@ -26,6 +26,11 @@ impl Decoder {
         4 * self.bits_per_num * self.num_windows
     }
 
+    #[cfg(test)]
+    pub fn container(&self) -> Size {
+        self.container
+    }
+
     pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Window> {
         Array::from_vec(
             self.decode(bits.into_shape((1, bits.len())).unwrap())
