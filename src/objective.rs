@@ -38,18 +38,14 @@ fn higher_windows_should_have_larger_area(container: Size, windows: &[Window]) -
 }
 
 fn windows_should_have_minimum_size(size: Size, windows: &[Window]) -> f64 {
+    let width = size.width as f64;
+    let height = size.height as f64;
     windows
         .iter()
         .map(|window| {
-            match (
-                window.size.width >= size.width,
-                window.size.height >= size.height,
-            ) {
-                (true, true) => 1.0,
-                (true, false) => 0.5,
-                (false, true) => 0.5,
-                (false, false) => 0.0,
-            }
+            (size.width.saturating_sub(window.size.width) as f64 / width
+                + size.height.saturating_sub(window.size.height) as f64 / height)
+                / 2.0
         })
         .sum::<f64>()
         / windows.len() as f64
