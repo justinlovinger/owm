@@ -23,8 +23,8 @@ fn higher_windows_should_have_larger_area(container: Size, windows: &[Window]) -
         .map(|w| w.area() as f64 / max_area)
         .tuple_windows()
         .map(|(x, y)| {
-            let diff = x - y;
-            diff.powi(2).copysign(diff)
+            let diff = y - x;
+            diff.abs().sqrt().copysign(diff)
         })
         .sum::<f64>()
 }
