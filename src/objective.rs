@@ -118,20 +118,28 @@ impl WindowsShouldHaveMinimumSize {
         } else {
             windows
                 .iter()
-                .map(|window| {
-                    (if self.size.width == 0 {
-                        0.0
-                    } else {
-                        self.size.width.saturating_sub(window.size.width) as f64 / self.width
-                    } + if self.size.height == 0 {
-                        0.0
-                    } else {
-                        self.size.height.saturating_sub(window.size.height) as f64 / self.height
-                    }) / 2.0
-                })
+                .map(
+                    |window| match (self.size.width == 0, self.size.height == 0) {
+                        (true, true) => 0.0,
+                        (true, false) => self.evaluate_height(window),
+                        (false, true) => self.evaluate_width(window),
+                        (false, false) => {
+                            1.0 - ((1.0 - self.evaluate_width(window))
+                                * (1.0 - self.evaluate_height(window)))
+                        }
+                    },
+                )
                 .sum::<f64>()
                 / self.worst_case
         }
+    }
+
+    fn evaluate_width(&self, window: &Window) -> f64 {
+        self.size.width.saturating_sub(window.size.width) as f64 / self.width
+    }
+
+    fn evaluate_height(&self, window: &Window) -> f64 {
+        self.size.height.saturating_sub(window.size.height) as f64 / self.height
     }
 }
 
