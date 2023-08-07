@@ -147,7 +147,7 @@ mod tests {
     use super::*;
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
-    fn minimize_overlapping_returns_values_in_range_0_1(x: ProblemInstance) {
+    fn minimize_overlapping_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0)
             .contains(&MinimizeOverlapping::new(x.container, x.windows.len()).evaluate(&x.windows)))
     }
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
-    fn higher_windows_should_have_larger_area_returns_values_in_range_0_1(x: ProblemInstance) {
+    fn higher_windows_should_have_larger_area_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0).contains(
             &HigherWindowsShouldHaveLargerArea::new(x.container, x.windows.len())
                 .evaluate(&x.windows)
@@ -312,7 +312,7 @@ mod tests {
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
     fn windows_should_have_minimum_size_returns_values_in_range_0_1(
         #[strategy(
-            ProblemInstance::arbitrary()
+            ContainedWindows::arbitrary()
                 .prop_flat_map(|x| {
                     (
                         (0..=x.container.width, 0..=x.container.height)
@@ -321,7 +321,7 @@ mod tests {
                     )
                 })
         )]
-        x: (Size, ProblemInstance),
+        x: (Size, ContainedWindows),
     ) {
         prop_assert!((0.0..=1.0).contains(
             &WindowsShouldHaveMinimumSize::new(x.0, x.1.windows.len()).evaluate(&x.1.windows)
@@ -384,12 +384,6 @@ mod tests {
         )
     }
 
-    #[derive(Debug, Clone)]
-    struct ProblemInstance {
-        container: Size,
-        windows: Vec<Window>,
-    }
-
     impl Arbitrary for Size {
         type Parameters = ();
         type Strategy = BoxedStrategy<Self>;
@@ -401,7 +395,13 @@ mod tests {
         }
     }
 
-    impl Arbitrary for ProblemInstance {
+    #[derive(Debug, Clone)]
+    struct ContainedWindows {
+        container: Size,
+        windows: Vec<Window>,
+    }
+
+    impl Arbitrary for ContainedWindows {
         type Parameters = ();
         type Strategy = BoxedStrategy<Self>;
 
@@ -409,7 +409,7 @@ mod tests {
             (Size::arbitrary(), 0_usize..=16)
                 .prop_map(|(size, count)| Decoder::new(16, size, count))
                 .prop_flat_map(|decoder| {
-                    vec(bool::arbitrary(), decoder.bits()).prop_map(move |bits| ProblemInstance {
+                    vec(bool::arbitrary(), decoder.bits()).prop_map(move |bits| ContainedWindows {
                         windows: decoder.decode1(Array::from_vec(bits).view()).into_raw_vec(),
                         container: decoder.container(),
                     })
