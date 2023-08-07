@@ -35,6 +35,42 @@ impl Window {
         self.pos.y + self.size.height
     }
 
+    pub fn center_x(&self) -> usize {
+        self.left() + self.size.width / 2
+    }
+
+    pub fn center_y(&self) -> usize {
+        self.top() + self.size.height / 2
+    }
+
+    pub fn top_left(&self) -> Pos {
+        Pos {
+            y: self.top(),
+            x: self.left(),
+        }
+    }
+
+    pub fn top_right(&self) -> Pos {
+        Pos {
+            y: self.top(),
+            x: self.right(),
+        }
+    }
+
+    pub fn bottom_left(&self) -> Pos {
+        Pos {
+            y: self.bottom(),
+            x: self.left(),
+        }
+    }
+
+    pub fn bottom_right(&self) -> Pos {
+        Pos {
+            y: self.bottom(),
+            x: self.right(),
+        }
+    }
+
     pub fn expand_left(&mut self, value: usize) {
         self.pos.x -= value;
         self.size.width += value;
@@ -51,14 +87,6 @@ impl Window {
 
     pub fn expand_bottom(&mut self, value: usize) {
         self.size.height += value;
-    }
-
-    pub fn center_x(&self) -> usize {
-        self.left() + self.size.width / 2
-    }
-
-    pub fn center_y(&self) -> usize {
-        self.top() + self.size.height / 2
     }
 
     pub fn x_range(&self) -> RangeInclusive<usize> {
@@ -86,8 +114,32 @@ impl Window {
     }
 }
 
+impl Pos {
+    /// Return manhattan distance between positions.
+    pub fn dist(self, other: Pos) -> usize {
+        (if self.x > other.x {
+            self.x - other.x
+        } else {
+            other.x - self.x
+        }) + (if self.y > other.y {
+            self.y - other.y
+        } else {
+            other.y - self.y
+        })
+    }
+}
+
 impl Size {
     pub fn area(&self) -> usize {
         self.width * self.height
+    }
+}
+
+impl From<Size> for Pos {
+    fn from(value: Size) -> Self {
+        Pos {
+            x: value.width,
+            y: value.height,
+        }
     }
 }

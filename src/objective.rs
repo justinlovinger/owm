@@ -1,12 +1,13 @@
 use itertools::Itertools;
 use ndarray::Array;
 
-use crate::types::{Size, Window};
+use crate::types::{Pos, Size, Window};
 
 pub struct Problem {
     minimize_overlapping: MinimizeOverlapping,
     higher_windows_larger_area: HigherWindowsShouldHaveLargerArea,
     minimum_size: WindowsShouldHaveMinimumSize,
+    windows_near_in_stack_close: WindowsNearInStackShouldBeClose,
 }
 
 impl Problem {
@@ -24,6 +25,10 @@ impl Problem {
                 },
                 window_count,
             ),
+            windows_near_in_stack_close: WindowsNearInStackShouldBeClose::new(
+                container,
+                window_count,
+            ),
         }
     }
 
@@ -31,6 +36,7 @@ impl Problem {
         10.0 * self.minimize_overlapping.evaluate(windows)
             + self.higher_windows_larger_area.evaluate(windows)
             + 2.0 * self.minimum_size.evaluate(windows)
+            + self.windows_near_in_stack_close.evaluate(windows)
     }
 }
 
@@ -41,9 +47,7 @@ struct MinimizeOverlapping {
 impl MinimizeOverlapping {
     fn new(container: Size, window_count: usize) -> Self {
         Self {
-            worst_case: (container.area()
-                * (0..window_count).tuple_combinations::<(_, _)>().count())
-                as f64,
+            worst_case: (choose_2(window_count) * container.area()) as f64,
         }
     }
 
@@ -131,6 +135,53 @@ impl WindowsShouldHaveMinimumSize {
     }
 }
 
+struct WindowsNearInStackShouldBeClose {
+    worst_case: f64,
+}
+
+impl WindowsNearInStackShouldBeClose {
+    fn new(container: Size, window_count: usize) -> Self {
+        Self {
+            worst_case: (window_count.saturating_sub(1)
+                * (Pos { x: 0, y: 0 }).dist(container.into())) as f64,
+        }
+    }
+
+    fn evaluate(&self, windows: &[Window]) -> f64 {
+        if windows.len() < 2 {
+            0.0
+        } else {
+            windows
+                .iter()
+                .tuple_windows()
+                .map(|(window, other)| {
+                    [
+                        window.top_left().dist(other.top_right()),
+                        window.top_left().dist(other.bottom_left()),
+                        window.top_right().dist(other.top_left()),
+                        window.top_right().dist(other.bottom_right()),
+                        window.bottom_left().dist(other.top_left()),
+                        window.bottom_left().dist(other.bottom_right()),
+                        window.bottom_right().dist(other.top_right()),
+                        window.bottom_right().dist(other.bottom_left()),
+                    ]
+                    .into_iter()
+                    .min()
+                    .unwrap()
+                })
+                .sum::<usize>() as f64
+                / self.worst_case
+        }
+    }
+}
+
+fn choose_2(n: usize) -> usize {
+    // This is *not* an efficient way to calculate this,
+    // but it is fast enough
+    // if used infrequently.
+    (0..n).tuple_combinations::<(_, _)>().count()
+}
+
 #[cfg(test)]
 mod tests {
     use std::iter::repeat;
@@ -142,7 +193,7 @@ mod tests {
     };
     use test_strategy::proptest;
 
-    use crate::{encoding::Decoder, types::Pos};
+    use crate::encoding::Decoder;
 
     use super::*;
 
@@ -380,6 +431,84 @@ mod tests {
         ];
         assert_eq!(
             WindowsShouldHaveMinimumSize::new(size, windows.len()).evaluate(&windows),
+            0.0
+        )
+    }
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn windows_near_in_stack_should_be_close_returns_values_in_range_0_1(x: ContainedWindows) {
+        prop_assert!((0.0..=1.0).contains(
+            &WindowsNearInStackShouldBeClose::new(x.container, x.windows.len())
+                .evaluate(&x.windows)
+        ))
+    }
+
+    #[test]
+    fn windows_near_in_stack_should_be_close_returns_1_for_worst_case() {
+        // Worst case is windows with zero size alternating opposite corners.
+        let container = Size {
+            width: 10,
+            height: 10,
+        };
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 10, y: 10 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsNearInStackShouldBeClose::new(container, windows.len()).evaluate(&windows),
+            1.0
+        )
+    }
+
+    #[test]
+    fn windows_near_in_stack_should_be_close_returns_0_for_best_case() {
+        let container = Size {
+            width: 10,
+            height: 10,
+        };
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 5,
+                    height: 5,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 5 },
+                size: Size {
+                    width: 5,
+                    height: 5,
+                },
+            },
+            Window {
+                pos: Pos { x: 5, y: 5 },
+                size: Size {
+                    width: 5,
+                    height: 5,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsNearInStackShouldBeClose::new(container, windows.len()).evaluate(&windows),
             0.0
         )
     }
