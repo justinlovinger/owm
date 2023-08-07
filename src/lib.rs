@@ -10,7 +10,7 @@ use ndarray::Axis;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 
 use crate::{
-    objective::evaluate,
+    objective::Problem,
     post_processing::{overlap_borders, remove_gaps},
     types::{Size, Window},
 };
@@ -19,11 +19,12 @@ use crate::{
 pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
     let container = Size { width, height };
     let decoder = Decoder::new(16, container, count);
+    let problem = Problem::new(container, count);
     let mut windows = decoder.decode1(
         UntilConvergedConfig::default()
             .argmin(&mut Config::start_default_for(decoder.bits(), |points| {
                 decoder.decode(points).map_axis(Axis(1), |windows| {
-                    evaluate(container, windows.as_slice().unwrap())
+                    problem.evaluate(windows.as_slice().unwrap())
                 })
             }))
             .view(),
