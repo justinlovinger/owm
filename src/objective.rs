@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use ndarray::Array;
 
 use crate::types::{Pos, Size, Window};
 
@@ -17,6 +16,7 @@ impl Problem {
             minimize_gaps: MinimizeGaps::new(container),
             minimize_overlapping: MinimizeOverlapping::new(container, window_count),
             higher_windows_larger_area: HigherWindowsShouldHaveLargerArea::new(
+                2.0,
                 container,
                 window_count,
             ),
@@ -145,18 +145,18 @@ fn obscured_area(windows: &[Window]) -> usize {
 }
 
 struct HigherWindowsShouldHaveLargerArea {
-    max_area: f64,
-    ideals: Vec<f64>,
+    ratio: f64,
     worst_case: f64,
 }
 
 impl HigherWindowsShouldHaveLargerArea {
-    fn new(container: Size, window_count: usize) -> Self {
-        let ideals = Array::linspace(1.0, 0.0, window_count).into_raw_vec();
+    fn new(ratio: f64, container: Size, window_count: usize) -> Self {
         Self {
-            max_area: container.area() as f64,
-            worst_case: ideals.iter().copied().map(|x: f64| x.max(1.0 - x)).sum(),
-            ideals,
+            ratio,
+            // The first pair of windows can be `container.area()` apart in area,
+            // but then remaining pairs can only be equal at worst.
+            worst_case: ratio * container.area() as f64
+                + (ratio - 1.0) * (container.area() * window_count.saturating_sub(2)) as f64,
         }
     }
 
@@ -166,8 +166,9 @@ impl HigherWindowsShouldHaveLargerArea {
         } else {
             windows
                 .iter()
-                .zip(self.ideals.iter())
-                .map(|(window, ideal)| ((window.area() as f64 / self.max_area) - ideal).abs())
+                .map(|x| x.area() as f64)
+                .tuple_windows()
+                .map(|(x, y)| (self.ratio * y - x).max(0.0))
                 .sum::<f64>()
                 / self.worst_case
         }
@@ -425,9 +426,12 @@ mod tests {
     }
 
     #[proptest]
-    fn higher_windows_should_have_larger_area_returns_values_in_range_0_1(x: ContainedWindows) {
+    fn higher_windows_should_have_larger_area_returns_values_in_range_0_1(
+        #[strategy((1.0..=100.0))] ratio: f64,
+        x: ContainedWindows,
+    ) {
         prop_assert!((0.0..=1.0).contains(
-            &HigherWindowsShouldHaveLargerArea::new(x.container, x.windows.len())
+            &HigherWindowsShouldHaveLargerArea::new(ratio, x.container, x.windows.len())
                 .evaluate(&x.windows)
         ))
     }
@@ -470,7 +474,8 @@ mod tests {
             },
         ];
         assert_eq!(
-            HigherWindowsShouldHaveLargerArea::new(container, windows.len()).evaluate(&windows),
+            HigherWindowsShouldHaveLargerArea::new(2.0, container, windows.len())
+                .evaluate(&windows),
             1.0
         )
     }
@@ -505,7 +510,8 @@ mod tests {
             },
         ];
         assert_eq!(
-            HigherWindowsShouldHaveLargerArea::new(container, windows.len()).evaluate(&windows),
+            HigherWindowsShouldHaveLargerArea::new(2.0, container, windows.len())
+                .evaluate(&windows),
             0.0
         )
     }
