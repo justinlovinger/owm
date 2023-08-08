@@ -1,18 +1,18 @@
 use std::ops::RangeInclusive;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
     pub pos: Pos,
     pub size: Size,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Pos {
     pub x: usize,
     pub y: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Size {
     pub width: usize,
     pub height: usize,
@@ -101,16 +101,23 @@ impl Window {
         self.size.area()
     }
 
-    pub fn overlap(&self, other: &Window) -> usize {
-        let x_overlap = self
-            .right()
-            .min(other.right())
-            .saturating_sub(self.left().max(other.left()));
-        let y_overlap = self
-            .bottom()
-            .min(other.bottom())
-            .saturating_sub(self.top().max(other.top()));
-        x_overlap * y_overlap
+    pub fn overlap(&self, other: &Window) -> Option<Window> {
+        let left = self.left().max(other.left());
+        let right = self.right().min(other.right());
+        let top = self.top().max(other.top());
+        let bottom = self.bottom().min(other.bottom());
+
+        if left < right && top < bottom {
+            Some(Window {
+                pos: Pos { x: left, y: top },
+                size: Size {
+                    width: right - left,
+                    height: bottom - top,
+                },
+            })
+        } else {
+            None
+        }
     }
 }
 

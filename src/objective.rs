@@ -4,6 +4,7 @@ use ndarray::Array;
 use crate::types::{Pos, Size, Window};
 
 pub struct Problem {
+    minimize_gaps: MinimizeGaps,
     minimize_overlapping: MinimizeOverlapping,
     higher_windows_larger_area: HigherWindowsShouldHaveLargerArea,
     minimum_size: WindowsShouldHaveMinimumSize,
@@ -13,6 +14,7 @@ pub struct Problem {
 impl Problem {
     pub fn new(container: Size, window_count: usize) -> Self {
         Self {
+            minimize_gaps: MinimizeGaps::new(container),
             minimize_overlapping: MinimizeOverlapping::new(container, window_count),
             higher_windows_larger_area: HigherWindowsShouldHaveLargerArea::new(
                 container,
@@ -33,10 +35,34 @@ impl Problem {
     }
 
     pub fn evaluate(&self, windows: &[Window]) -> f64 {
-        10.0 * self.minimize_overlapping.evaluate(windows)
+        20.0 * self.minimize_gaps.evaluate(windows)
+            + 10.0 * self.minimize_overlapping.evaluate(windows)
             + self.higher_windows_larger_area.evaluate(windows)
             + 2.0 * self.minimum_size.evaluate(windows)
             + self.windows_near_in_stack_close.evaluate(windows)
+    }
+}
+
+struct MinimizeGaps {
+    area: usize,
+    worst_case: f64,
+}
+
+impl MinimizeGaps {
+    fn new(container: Size) -> Self {
+        Self {
+            area: container.area(),
+            worst_case: container.area() as f64,
+        }
+    }
+
+    fn evaluate(&self, windows: &[Window]) -> f64 {
+        if windows.is_empty() {
+            1.0
+        } else {
+            // This assumes windows do not exceed container bounds.
+            (self.area - covered_area(windows)) as f64 / self.worst_case
+        }
     }
 }
 
@@ -47,7 +73,7 @@ struct MinimizeOverlapping {
 impl MinimizeOverlapping {
     fn new(container: Size, window_count: usize) -> Self {
         Self {
-            worst_case: (choose_2(window_count) * container.area()) as f64,
+            worst_case: (window_count.saturating_sub(1) * container.area()) as f64,
         }
     }
 
@@ -55,13 +81,66 @@ impl MinimizeOverlapping {
         if windows.len() < 2 {
             0.0
         } else {
+            obscured_area(windows) as f64 / self.worst_case
+        }
+    }
+}
+
+// Adapted from a solution by `m-hgn` on Code Wars,
+// <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
+// This could be optimized using segment trees.
+/// Return the total area of a union of rectangles.
+fn covered_area(windows: &[Window]) -> usize {
+    let mut xs = windows
+        .iter()
+        .flat_map(|window| [window.left(), window.right()])
+        .collect_vec();
+    xs.sort();
+    xs.dedup();
+
+    let mut windows = windows.to_vec();
+    windows.sort_by_key(|window| window.top());
+
+    xs.into_iter()
+        .tuple_windows()
+        .map(|(left, right)| {
+            let width = right - left;
+            let mut last_y2 = usize::MIN;
             windows
                 .iter()
-                .tuple_combinations()
-                .map(|(window, other)| window.overlap(other))
-                .sum::<usize>() as f64
-                / self.worst_case
-        }
+                .filter(|window| window.left() <= left && right <= window.right())
+                .map(|window| {
+                    let ret = width * window.bottom().saturating_sub(last_y2.max(window.top()));
+                    last_y2 = window.bottom().max(last_y2);
+                    ret
+                })
+                .sum::<usize>()
+        })
+        .sum()
+}
+
+/// Return the total area obscured in a set of rectangles.
+/// If `n` rectangles are overlapped by an `n + 1`th rectangle,
+/// the overlapped area will be counted `n` times,
+/// but not `n + 1` times.
+fn obscured_area(windows: &[Window]) -> usize {
+    if windows.len() < 2 {
+        0
+    } else {
+        let overlaps = windows
+            .iter()
+            .enumerate()
+            .map(|(i, window)| {
+                windows
+                    .iter()
+                    .enumerate()
+                    .filter(|(other_i, _)| i != *other_i)
+                    .filter_map(|(_, other)| window.overlap(other))
+                    .collect_vec()
+            })
+            .collect_vec();
+        overlaps.iter().map(|x| covered_area(x)).sum::<usize>()
+            - covered_area(&overlaps.into_iter().flatten().collect_vec())
     }
 }
 
@@ -183,16 +262,9 @@ impl WindowsNearInStackShouldBeClose {
     }
 }
 
-fn choose_2(n: usize) -> usize {
-    // This is *not* an efficient way to calculate this,
-    // but it is fast enough
-    // if used infrequently.
-    (0..n).tuple_combinations::<(_, _)>().count()
-}
-
 #[cfg(test)]
 mod tests {
-    use std::iter::repeat;
+    use std::iter::{once, repeat};
 
     use ndarray::prelude::*;
     use proptest::{
@@ -204,6 +276,79 @@ mod tests {
     use crate::encoding::Decoder;
 
     use super::*;
+
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn minimize_gaps_returns_values_in_range_0_1(x: ContainedWindows) {
+        prop_assert!((0.0..=1.0).contains(&MinimizeGaps::new(x.container).evaluate(&x.windows)))
+    }
+
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn minimize_gaps_returns_1_for_worst_case(
+        container: Size,
+        #[strategy((0_usize..=16))] count: usize,
+    ) {
+        prop_assert_eq!(
+            MinimizeGaps::new(container).evaluate(
+                &repeat(Window {
+                    pos: Pos { x: 0, y: 0 },
+                    size: Size {
+                        width: 0,
+                        height: 0
+                    },
+                })
+                .take(count)
+                .collect_vec()
+            ),
+            1.0
+        )
+    }
+
+    #[test]
+    fn minimize_gaps_returns_0_for_best_case_without_overlap() {
+        let container = Size {
+            width: 10,
+            height: 10,
+        };
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 10,
+                    height: 5,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 5 },
+                size: Size {
+                    width: 5,
+                    height: 5,
+                },
+            },
+            Window {
+                pos: Pos { x: 5, y: 5 },
+                size: Size {
+                    width: 5,
+                    height: 5,
+                },
+            },
+        ];
+        assert_eq!(MinimizeGaps::new(container).evaluate(&windows), 0.0)
+    }
+
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn minimize_gaps_returns_0_for_best_case_with_overlap(x: ContainedWindows) {
+        prop_assert_eq!(
+            MinimizeGaps::new(x.container).evaluate(
+                &once(Window {
+                    pos: Pos { x: 0, y: 0 },
+                    size: x.container
+                })
+                .chain(x.windows)
+                .collect_vec()
+            ),
+            0.0
+        )
+    }
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
     fn minimize_overlapping_returns_values_in_range_0_1(x: ContainedWindows) {
