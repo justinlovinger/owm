@@ -23,8 +23,8 @@ impl Problem {
             ),
             minimum_size: WindowsShouldHaveMinimumSize::new(
                 Size {
-                    width: 800,
-                    height: 600,
+                    width: 400,
+                    height: 300,
                 },
                 window_count,
             ),
@@ -37,10 +37,10 @@ impl Problem {
     }
 
     pub fn evaluate(&self, windows: &[Window]) -> f64 {
-        20.0 * self.minimize_gaps.evaluate(windows)
-            + 10.0 * self.minimize_overlapping.evaluate(windows)
+        4.0 * self.minimize_gaps.evaluate(windows)
+            + 2.0 * self.minimize_overlapping.evaluate(windows)
             + self.higher_windows_larger_area.evaluate(windows)
-            + 2.0 * self.minimum_size.evaluate(windows)
+            + 5.0 * self.minimum_size.evaluate(windows)
             + self.windows_near_in_stack_close.evaluate(windows)
             + self.windows_should_be_in_reading_order.evaluate(windows)
     }
