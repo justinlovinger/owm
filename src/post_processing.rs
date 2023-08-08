@@ -452,7 +452,7 @@ fn div_ceil(x: usize, y: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use proptest::{prelude::*, test_runner::FileFailurePersistence};
+    use proptest::prelude::*;
     use test_strategy::proptest;
 
     use super::*;
@@ -463,7 +463,7 @@ mod tests {
         assert!(!intersects(0..=4, 5..=15));
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn intersects_is_symmetrical(x: RangeInclusive<usize>, y: RangeInclusive<usize>) {
         prop_assert_eq!(intersects(&x, &y), intersects(&y, &x));
     }

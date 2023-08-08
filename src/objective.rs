@@ -267,22 +267,19 @@ mod tests {
     use std::iter::{once, repeat};
 
     use ndarray::prelude::*;
-    use proptest::{
-        prelude::{prop::collection::vec, *},
-        test_runner::FileFailurePersistence,
-    };
+    use proptest::prelude::{prop::collection::vec, *};
     use test_strategy::proptest;
 
     use crate::encoding::Decoder;
 
     use super::*;
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_gaps_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0).contains(&MinimizeGaps::new(x.container).evaluate(&x.windows)))
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_gaps_returns_1_for_worst_case(
         container: Size,
         #[strategy((0_usize..=16))] count: usize,
@@ -335,7 +332,7 @@ mod tests {
         assert_eq!(MinimizeGaps::new(container).evaluate(&windows), 0.0)
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_gaps_returns_0_for_best_case_with_overlap(x: ContainedWindows) {
         prop_assert_eq!(
             MinimizeGaps::new(x.container).evaluate(
@@ -350,13 +347,13 @@ mod tests {
         )
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_overlapping_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0)
             .contains(&MinimizeOverlapping::new(x.container, x.windows.len()).evaluate(&x.windows)))
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_overlapping_returns_1_for_worst_case(
         container: Size,
         #[strategy((2_usize..=16))] count: usize,
@@ -374,7 +371,7 @@ mod tests {
         )
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn minimize_overlapping_returns_0_for_less_than_2_windows(
         container: Size,
         #[strategy((0_usize..=1))] count: usize,
@@ -427,7 +424,7 @@ mod tests {
         )
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn higher_windows_should_have_larger_area_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0).contains(
             &HigherWindowsShouldHaveLargerArea::new(x.container, x.windows.len())
@@ -513,7 +510,7 @@ mod tests {
         )
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn windows_should_have_minimum_size_returns_values_in_range_0_1(
         #[strategy(
             ContainedWindows::arbitrary()
@@ -532,7 +529,7 @@ mod tests {
         ))
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn windows_should_have_minimum_size_returns_1_for_worst_case(
         size: Size,
         #[strategy((1_usize..=16))] count: usize,
@@ -587,7 +584,7 @@ mod tests {
             0.0
         )
     }
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest]
     fn windows_near_in_stack_should_be_close_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0).contains(
             &WindowsNearInStackShouldBeClose::new(x.container, x.windows.len())
