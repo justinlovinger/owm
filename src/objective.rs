@@ -8,6 +8,7 @@ pub struct Problem {
     higher_windows_larger_area: HigherWindowsShouldHaveLargerArea,
     minimum_size: WindowsShouldHaveMinimumSize,
     windows_near_in_stack_close: WindowsNearInStackShouldBeClose,
+    windows_should_be_in_reading_order: WindowsShouldBeInReadingOrder,
 }
 
 impl Problem {
@@ -31,6 +32,7 @@ impl Problem {
                 container,
                 window_count,
             ),
+            windows_should_be_in_reading_order: WindowsShouldBeInReadingOrder::new(window_count),
         }
     }
 
@@ -40,6 +42,7 @@ impl Problem {
             + self.higher_windows_larger_area.evaluate(windows)
             + 2.0 * self.minimum_size.evaluate(windows)
             + self.windows_near_in_stack_close.evaluate(windows)
+            + self.windows_should_be_in_reading_order.evaluate(windows)
     }
 }
 
@@ -258,6 +261,33 @@ impl WindowsNearInStackShouldBeClose {
                     .unwrap()
                 })
                 .sum::<usize>() as f64
+                / self.worst_case
+        }
+    }
+}
+
+struct WindowsShouldBeInReadingOrder {
+    worst_case: f64,
+}
+
+impl WindowsShouldBeInReadingOrder {
+    fn new(window_count: usize) -> Self {
+        Self {
+            worst_case: window_count.saturating_sub(1) as f64,
+        }
+    }
+
+    fn evaluate(&self, windows: &[Window]) -> f64 {
+        if windows.len() < 2 {
+            0.0
+        } else {
+            windows
+                .iter()
+                .tuple_windows()
+                .filter(|(window, other)| {
+                    other.top() < window.top() || other.left() < window.left()
+                })
+                .count() as f64
                 / self.worst_case
         }
     }
@@ -590,6 +620,7 @@ mod tests {
             0.0
         )
     }
+
     #[proptest]
     fn windows_near_in_stack_should_be_close_returns_values_in_range_0_1(x: ContainedWindows) {
         prop_assert!((0.0..=1.0).contains(
@@ -667,6 +698,128 @@ mod tests {
             WindowsNearInStackShouldBeClose::new(container, windows.len()).evaluate(&windows),
             0.0
         )
+    }
+
+    #[proptest]
+    fn windows_should_be_in_reading_order_returns_values_in_range_0_1(x: ContainedWindows) {
+        prop_assert!((0.0..=1.0)
+            .contains(&WindowsShouldBeInReadingOrder::new(x.windows.len()).evaluate(&x.windows)))
+    }
+
+    #[test]
+    fn windows_should_be_in_reading_order_returns_1_for_worst_case() {
+        let windows = [
+            Window {
+                pos: Pos { x: 2, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 1, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsShouldBeInReadingOrder::new(windows.len()).evaluate(&windows),
+            1.0
+        );
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 2 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 1 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsShouldBeInReadingOrder::new(windows.len()).evaluate(&windows),
+            1.0
+        );
+    }
+
+    #[test]
+    fn windows_should_be_in_reading_order_returns_0_for_best_case() {
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 1, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 2, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsShouldBeInReadingOrder::new(windows.len()).evaluate(&windows),
+            0.0
+        );
+        let windows = [
+            Window {
+                pos: Pos { x: 0, y: 0 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 1 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+            Window {
+                pos: Pos { x: 0, y: 2 },
+                size: Size {
+                    width: 0,
+                    height: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            WindowsShouldBeInReadingOrder::new(windows.len()).evaluate(&windows),
+            0.0
+        );
     }
 
     impl Arbitrary for Size {
