@@ -1,6 +1,9 @@
-use std::time::Instant;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
-use owm::layout;
+use once_cell::sync::Lazy;
+use owm::{layout, Window};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -44,9 +47,9 @@ impl OutputId {
 pub struct LayoutManager {
     // These will be initialized
     // by Wayland events.
-    seat: Option<WlSeat>,
+    seat: Option<Arc<WlSeat>>,
     manager: Option<RiverLayoutManagerV3>,
-    control: Option<ZriverControlV1>,
+    control: Option<Arc<Mutex<ZriverControlV1>>>,
 }
 
 impl LayoutManager {
@@ -82,7 +85,12 @@ impl Dispatch<WlRegistry, ()> for LayoutManager {
         {
             match interface.as_str() {
                 "wl_seat" => {
-                    state.seat = Some(registry.bind::<WlSeat, _, Self>(name, version, qhandle, ()));
+                    state.seat = Some(Arc::new(registry.bind::<WlSeat, _, Self>(
+                        name,
+                        version,
+                        qhandle,
+                        (),
+                    )));
                 }
                 "wl_output" => {
                     registry.bind::<WlOutput, _, Self>(name, version, qhandle, ());
@@ -96,8 +104,9 @@ impl Dispatch<WlRegistry, ()> for LayoutManager {
                     ));
                 }
                 "zriver_control_v1" => {
-                    state.control =
-                        Some(registry.bind::<ZriverControlV1, _, Self>(name, version, qhandle, ()));
+                    state.control = Some(Arc::new(Mutex::new(
+                        registry.bind::<ZriverControlV1, _, Self>(name, version, qhandle, ()),
+                    )));
                 }
                 _ => {}
             }
@@ -154,43 +163,60 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 tags: _,
                 serial,
             } => {
-                // If this takes more than 100 milliseconds,
-                // River will ignore the result,
-                // see <https://github.com/riverwm/river/issues/867>.
-                let now = Instant::now();
-                for window in layout(
-                    usable_width as usize,
-                    usable_height as usize,
-                    view_count as usize,
-                ) {
-                    proxy.push_view_dimensions(
-                        window.pos.x as i32,
-                        window.pos.y as i32,
-                        window.size.width as u32,
-                        window.size.height as u32,
-                        serial,
-                    );
-                }
-                proxy.commit("owm".to_owned(), serial);
-                if now.elapsed().as_millis() > 100 {
-                    // River will send a new layout demand
-                    // if it receives a layout command.
-                    let control = state
-                        .control
-                        .as_ref()
-                        .expect("River control should be initialized");
-                    control.add_argument("send-layout-cmd".to_owned());
-                    control.add_argument("owm".to_owned());
-                    control.add_argument("retry-layout".to_owned());
-                    control.run_command(
-                        state.seat.as_ref().expect("seat should be initialized"),
-                        qhandle,
-                        (),
-                    );
+                type Key = (usize, usize, usize);
+                static CACHE: Lazy<Mutex<HashMap<Key, Vec<Window>>>> =
+                    Lazy::new(|| Mutex::new(HashMap::new()));
+                static STARTED: Lazy<Mutex<HashSet<Key>>> =
+                    Lazy::new(|| Mutex::new(HashSet::new()));
+
+                let usable_width = usable_width as usize;
+                let usable_height = usable_height as usize;
+                let view_count = view_count as usize;
+                let key = (usable_width, usable_height, view_count);
+
+                match CACHE.lock().unwrap().get(&key) {
+                    Some(layout) => {
+                        for window in layout {
+                            proxy.push_view_dimensions(
+                                window.pos.x as i32,
+                                window.pos.y as i32,
+                                window.size.width as u32,
+                                window.size.height as u32,
+                                serial,
+                            );
+                        }
+                        proxy.commit("owm".to_owned(), serial);
+                    }
+                    None => {
+                        if STARTED.lock().unwrap().insert(key) {
+                            let control = Arc::clone(
+                                state
+                                    .control
+                                    .as_ref()
+                                    .expect("River control should be initialized"),
+                            );
+                            let seat = Arc::clone(
+                                state.seat.as_ref().expect("seat should be initialized"),
+                            );
+                            let qhandle = qhandle.clone();
+                            thread::spawn(move || {
+                                let layout = layout(usable_width, usable_height, view_count);
+                                CACHE.lock().unwrap().insert(key, layout);
+
+                                // River will send a new layout demand
+                                // if it receives a layout command.
+                                let control = control.lock().unwrap();
+                                control.add_argument("send-layout-cmd".to_owned());
+                                control.add_argument("owm".to_owned());
+                                control.add_argument("retry-layout".to_owned());
+                                control.run_command(&seat, &qhandle, ());
+                            });
+                        }
+                    }
                 }
             }
             river_layout_v3::Event::NamespaceInUse => {
-                panic!("namespace in use: layout program already running");
+                panic!("namespace in use: layout program may already be running");
             }
             _ => {}
         }
