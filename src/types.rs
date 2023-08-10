@@ -19,6 +19,13 @@ pub struct Size {
 }
 
 impl Window {
+    pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+        Self {
+            pos: Pos { x, y },
+            size: Size { width, height },
+        }
+    }
+
     pub fn left(&self) -> usize {
         self.pos.x
     }
@@ -122,6 +129,10 @@ impl Window {
 }
 
 impl Pos {
+    pub fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
+    }
+
     /// Return manhattan distance between positions.
     pub fn dist(self, other: Pos) -> usize {
         (if self.x > other.x {
@@ -137,6 +148,10 @@ impl Pos {
 }
 
 impl Size {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self { width, height }
+    }
+
     pub fn area(&self) -> usize {
         self.width * self.height
     }

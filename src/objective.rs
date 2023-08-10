@@ -17,13 +17,7 @@ impl Problem {
             gaps: MinimizeGaps::new(container),
             overlapping: MinimizeOverlapping::new(container, window_count),
             higher_larger_area: GiveHigherInStackLargerArea::new(2.0, container, window_count),
-            min_size: GiveMinSize::new(
-                Size {
-                    width: 400,
-                    height: 300,
-                },
-                window_count,
-            ),
+            min_size: GiveMinSize::new(Size::new(400, 300), window_count),
             near_in_stack_close: PlaceNearInStackClose::new(container, window_count),
             reading_order: PlaceInReadingOrder::new(window_count),
         }
@@ -226,8 +220,8 @@ struct PlaceNearInStackClose {
 impl PlaceNearInStackClose {
     fn new(container: Size, window_count: usize) -> Self {
         Self {
-            worst_case: (window_count.saturating_sub(1)
-                * (Pos { x: 0, y: 0 }).dist(container.into())) as f64,
+            worst_case: (window_count.saturating_sub(1) * (Pos::new(0, 0)).dist(container.into()))
+                as f64,
         }
     }
 
@@ -308,17 +302,8 @@ mod tests {
         #[strategy((0_usize..=16))] count: usize,
     ) {
         prop_assert_eq!(
-            MinimizeGaps::new(container).evaluate(
-                &repeat(Window {
-                    pos: Pos { x: 0, y: 0 },
-                    size: Size {
-                        width: 0,
-                        height: 0
-                    },
-                })
-                .take(count)
-                .collect_vec()
-            ),
+            MinimizeGaps::new(container)
+                .evaluate(&repeat(Window::new(0, 0, 0, 0)).take(count).collect_vec()),
             1.0
         )
     }
@@ -330,27 +315,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 5, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
+            Window::new(0, 0, 10, 5),
+            Window::new(0, 5, 5, 5),
+            Window::new(5, 5, 5, 5),
         ];
         assert_eq!(MinimizeGaps::new(container).evaluate(&windows), 0.0)
     }
@@ -359,12 +326,9 @@ mod tests {
     fn minimize_gaps_returns_0_for_best_case_with_overlap(x: ContainedWindows) {
         prop_assert_eq!(
             MinimizeGaps::new(x.container).evaluate(
-                &once(Window {
-                    pos: Pos { x: 0, y: 0 },
-                    size: x.container
-                })
-                .chain(x.windows)
-                .collect_vec()
+                &once(Window::new(0, 0, x.container.width, x.container.height))
+                    .chain(x.windows)
+                    .collect_vec()
             ),
             0.0
         )
@@ -383,12 +347,9 @@ mod tests {
     ) {
         prop_assert_eq!(
             MinimizeOverlapping::new(container, count).evaluate(
-                &repeat(Window {
-                    pos: Pos { x: 0, y: 0 },
-                    size: container
-                })
-                .take(count)
-                .collect_vec()
+                &repeat(Window::new(0, 0, container.width, container.height))
+                    .take(count)
+                    .collect_vec()
             ),
             1.0
         )
@@ -401,12 +362,9 @@ mod tests {
     ) {
         prop_assert_eq!(
             MinimizeOverlapping::new(container, count).evaluate(
-                &repeat(Window {
-                    pos: Pos { x: 0, y: 0 },
-                    size: container
-                })
-                .take(count)
-                .collect_vec()
+                &repeat(Window::new(0, 0, container.width, container.height))
+                    .take(count)
+                    .collect_vec()
             ),
             0.0
         )
@@ -419,27 +377,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 5, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
+            Window::new(0, 0, 10, 5),
+            Window::new(0, 5, 5, 5),
+            Window::new(5, 5, 5, 5),
         ];
         assert_eq!(
             MinimizeOverlapping::new(container, windows.len()).evaluate(&windows),
@@ -473,27 +413,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 10,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 10,
-                },
-            },
+            Window::new(0, 0, 0, 0),
+            Window::new(0, 0, 10, 10),
+            Window::new(0, 0, 10, 10),
         ];
         assert_eq!(
             GiveHigherInStackLargerArea::new(2.0, container, windows.len()).evaluate(&windows),
@@ -508,27 +430,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 10,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(0, 0, 10, 10),
+            Window::new(0, 0, 10, 5),
+            Window::new(0, 0, 0, 0),
         ];
         assert_eq!(
             GiveHigherInStackLargerArea::new(2.0, container, windows.len()).evaluate(&windows),
@@ -561,17 +465,8 @@ mod tests {
         #[strategy((1_usize..=16))] count: usize,
     ) {
         assert_eq!(
-            GiveMinSize::new(size, count).evaluate(
-                &repeat(Window {
-                    pos: Pos { x: 0, y: 0 },
-                    size: Size {
-                        width: 0,
-                        height: 0,
-                    }
-                })
-                .take(count)
-                .collect_vec()
-            ),
+            GiveMinSize::new(size, count)
+                .evaluate(&repeat(Window::new(0, 0, 0, 0)).take(count).collect_vec()),
             1.0
         )
     }
@@ -583,27 +478,9 @@ mod tests {
             height: 5,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 10,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 10,
-                    height: 5,
-                },
-            },
+            Window::new(0, 0, 10, 10),
+            Window::new(0, 0, 5, 5),
+            Window::new(0, 0, 10, 5),
         ];
         assert_eq!(
             GiveMinSize::new(size, windows.len()).evaluate(&windows),
@@ -626,27 +503,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 10, y: 10 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(0, 0, 0, 0),
+            Window::new(10, 10, 0, 0),
+            Window::new(0, 0, 0, 0),
         ];
         assert_eq!(
             PlaceNearInStackClose::new(container, windows.len()).evaluate(&windows),
@@ -661,27 +520,9 @@ mod tests {
             height: 10,
         };
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
-            Window {
-                pos: Pos { x: 5, y: 5 },
-                size: Size {
-                    width: 5,
-                    height: 5,
-                },
-            },
+            Window::new(0, 0, 5, 5),
+            Window::new(0, 5, 5, 5),
+            Window::new(5, 5, 5, 5),
         ];
         assert_eq!(
             PlaceNearInStackClose::new(container, windows.len()).evaluate(&windows),
@@ -699,54 +540,18 @@ mod tests {
     #[test]
     fn place_in_reading_order_returns_1_for_worst_case() {
         let windows = [
-            Window {
-                pos: Pos { x: 2, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 1, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(2, 0, 0, 0),
+            Window::new(1, 0, 0, 0),
+            Window::new(0, 0, 0, 0),
         ];
         assert_eq!(
             PlaceInReadingOrder::new(windows.len()).evaluate(&windows),
             1.0
         );
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 2 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 1 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(0, 2, 0, 0),
+            Window::new(0, 1, 0, 0),
+            Window::new(0, 0, 0, 0),
         ];
         assert_eq!(
             PlaceInReadingOrder::new(windows.len()).evaluate(&windows),
@@ -757,54 +562,18 @@ mod tests {
     #[test]
     fn place_in_reading_order_returns_0_for_best_case() {
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 1, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 2, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(0, 0, 0, 0),
+            Window::new(1, 0, 0, 0),
+            Window::new(2, 0, 0, 0),
         ];
         assert_eq!(
             PlaceInReadingOrder::new(windows.len()).evaluate(&windows),
             0.0
         );
         let windows = [
-            Window {
-                pos: Pos { x: 0, y: 0 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 1 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
-            Window {
-                pos: Pos { x: 0, y: 2 },
-                size: Size {
-                    width: 0,
-                    height: 0,
-                },
-            },
+            Window::new(0, 0, 0, 0),
+            Window::new(0, 1, 0, 0),
+            Window::new(0, 2, 0, 0),
         ];
         assert_eq!(
             PlaceInReadingOrder::new(windows.len()).evaluate(&windows),

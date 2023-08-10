@@ -5,7 +5,7 @@ use ndarray::prelude::*;
 use crate::{
     binary::reversed_bits_to_frac,
     post_processing::trim_off_screen,
-    types::{Pos, Size, Window},
+    types::{Size, Window},
 };
 
 #[derive(Clone, Debug)]
@@ -73,31 +73,29 @@ impl Decoder {
                 self.bits_per_window(),
             ))
             .unwrap()
-            .map_axis(Axis(2), |xs| Window {
-                pos: Pos {
-                    x: reversed_bits_to_frac(
+            .map_axis(Axis(2), |xs| {
+                Window::new(
+                    reversed_bits_to_frac(
                         self.x_range.clone(),
                         xs.slice(s![self.x_bits_range.clone()]),
                     )
                     .into_scalar() as usize,
-                    y: reversed_bits_to_frac(
+                    reversed_bits_to_frac(
                         self.y_range.clone(),
                         xs.slice(s![self.y_bits_range.clone()]),
                     )
                     .into_scalar() as usize,
-                },
-                size: Size {
-                    width: reversed_bits_to_frac(
+                    reversed_bits_to_frac(
                         self.width_range.clone(),
                         xs.slice(s![self.width_bits_range.clone()]),
                     )
                     .into_scalar() as usize,
-                    height: reversed_bits_to_frac(
+                    reversed_bits_to_frac(
                         self.height_range.clone(),
                         xs.slice(s![self.height_bits_range.clone()]),
                     )
                     .into_scalar() as usize,
-                },
+                )
             });
         for mut windows in windows.axis_iter_mut(Axis(0)) {
             trim_off_screen(self.container, windows.view_mut());
