@@ -4,6 +4,9 @@ mod objective;
 mod post_processing;
 mod types;
 
+#[cfg(test)]
+mod testing;
+
 use encoding::Decoder;
 use ndarray::Axis;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
