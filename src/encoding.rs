@@ -1,9 +1,9 @@
-use std::ops::{Range, RangeInclusive};
+use std::ops::Range;
 
 use ndarray::prelude::*;
 
 use crate::{
-    binary::reversed_bits_to_frac,
+    binary::ToFracLE,
     post_processing::trim_off_screen,
     types::{Size, Window},
 };
@@ -12,10 +12,10 @@ use crate::{
 pub struct Decoder {
     container: Size,
     num_windows: usize,
-    x_range: RangeInclusive<f64>,
-    y_range: RangeInclusive<f64>,
-    width_range: RangeInclusive<f64>,
-    height_range: RangeInclusive<f64>,
+    x_decoder: ToFracLE<f64>,
+    y_decoder: ToFracLE<f64>,
+    width_decoder: ToFracLE<f64>,
+    height_decoder: ToFracLE<f64>,
     x_bits_range: Range<usize>,
     y_bits_range: Range<usize>,
     width_bits_range: Range<usize>,
@@ -35,10 +35,16 @@ impl Decoder {
         Self {
             container,
             num_windows,
-            x_range: 0.0..=(x_max as f64),
-            y_range: 0.0..=(y_max as f64),
-            width_range: (*width_range.start() as f64)..=(*width_range.end() as f64),
-            height_range: (*height_range.start() as f64)..=(*height_range.end() as f64),
+            x_decoder: ToFracLE::new(0.0..=(x_max as f64), bits_per_x),
+            y_decoder: ToFracLE::new(0.0..=(y_max as f64), bits_per_y),
+            width_decoder: ToFracLE::new(
+                (*width_range.start() as f64)..=(*width_range.end() as f64),
+                bits_per_width,
+            ),
+            height_decoder: ToFracLE::new(
+                (*height_range.start() as f64)..=(*height_range.end() as f64),
+                bits_per_height,
+            ),
             x_bits_range: 0..bits_per_x,
             y_bits_range: bits_per_x..(bits_per_x + bits_per_y),
             width_bits_range: (bits_per_x + bits_per_y)..(bits_per_x + bits_per_y + bits_per_width),
@@ -77,26 +83,22 @@ impl Decoder {
             .unwrap()
             .map_axis(Axis(2), |xs| {
                 Window::new(
-                    reversed_bits_to_frac(
-                        self.x_range.clone(),
-                        xs.slice(s![self.x_bits_range.clone()]),
-                    )
-                    .into_scalar() as usize,
-                    reversed_bits_to_frac(
-                        self.y_range.clone(),
-                        xs.slice(s![self.y_bits_range.clone()]),
-                    )
-                    .into_scalar() as usize,
-                    reversed_bits_to_frac(
-                        self.width_range.clone(),
-                        xs.slice(s![self.width_bits_range.clone()]),
-                    )
-                    .into_scalar() as usize,
-                    reversed_bits_to_frac(
-                        self.height_range.clone(),
-                        xs.slice(s![self.height_bits_range.clone()]),
-                    )
-                    .into_scalar() as usize,
+                    self.x_decoder
+                        .decode(xs.slice(s![self.x_bits_range.clone()]).into_iter().copied())
+                        as usize,
+                    self.y_decoder
+                        .decode(xs.slice(s![self.y_bits_range.clone()]).into_iter().copied())
+                        as usize,
+                    self.width_decoder.decode(
+                        xs.slice(s![self.width_bits_range.clone()])
+                            .into_iter()
+                            .copied(),
+                    ) as usize,
+                    self.height_decoder.decode(
+                        xs.slice(s![self.height_bits_range.clone()])
+                            .into_iter()
+                            .copied(),
+                    ) as usize,
                 )
             });
         for mut windows in windows.axis_iter_mut(Axis(0)) {
