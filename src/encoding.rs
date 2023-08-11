@@ -24,6 +24,11 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn new(min_size: Size, max_size: Size, container: Size, num_windows: usize) -> Self {
+        debug_assert!(min_size.width <= max_size.width);
+        debug_assert!(min_size.height <= max_size.height);
+        debug_assert!(max_size.width <= container.width);
+        debug_assert!(max_size.height <= container.height);
+
         let x_max = container.width.saturating_sub(min_size.width);
         let y_max = container.height.saturating_sub(min_size.height);
         let width_range = min_size.width..=max_size.width;

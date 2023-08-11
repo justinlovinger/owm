@@ -20,8 +20,8 @@ use crate::{
 pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
     let container = Size { width, height };
     let decoder = Decoder::new(
-        Size::new(320, 180),
-        Size::new(1920, container.height),
+        Size::new(320.min(container.width), 180.min(container.height)),
+        Size::new(1920.min(container.width), container.height),
         container,
         count,
     );

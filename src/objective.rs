@@ -141,6 +141,7 @@ struct GiveHigherInStackLargerArea {
 
 impl GiveHigherInStackLargerArea {
     fn new(ratio: f64, container: Size, window_count: usize) -> Self {
+        debug_assert!(ratio >= 1.0);
         Self {
             ratio,
             // The first pair of windows can be `container.area()` apart in area,
