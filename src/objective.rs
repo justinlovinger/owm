@@ -26,10 +26,10 @@ impl Problem {
     pub fn evaluate(&self, windows: &[Window]) -> f64 {
         4.0 * self.gaps.evaluate(windows)
             + 2.0 * self.overlapping.evaluate(windows)
-            + self.higher_larger_area.evaluate(windows)
+            + 1.5 * self.higher_larger_area.evaluate(windows)
             + self.near_in_stack_close.evaluate(windows)
             + self.reading_order.evaluate(windows)
-            + 5.0 * self.center_main.evaluate(windows)
+            + self.center_main.evaluate(windows)
     }
 }
 
@@ -158,7 +158,13 @@ impl GiveHigherInStackLargerArea {
                 .iter()
                 .map(|x| x.area() as f64)
                 .tuple_windows()
-                .map(|(x, y)| (self.ratio * y - x).max(0.0))
+                // Use `.abs()` instead of `.max(0.0)`
+                // to encourage lower windows to grow
+                // when possible.
+                // Otherwise,
+                // the lowest window can always be small
+                // with no penalty.
+                .map(|(x, y)| (self.ratio * y - x).abs())
                 .sum::<f64>()
                 / self.worst_case
         }
@@ -409,7 +415,7 @@ mod tests {
         let windows = [
             Window::new(0, 0, 10, 10),
             Window::new(0, 0, 10, 5),
-            Window::new(0, 0, 0, 0),
+            Window::new(0, 0, 5, 5),
         ];
         assert_eq!(
             GiveHigherInStackLargerArea::new(2.0, container, windows.len()).evaluate(&windows),
