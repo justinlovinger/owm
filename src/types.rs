@@ -42,6 +42,10 @@ impl Window {
         self.pos.y + self.size.height
     }
 
+    pub fn center(&self) -> Pos {
+        Pos::new(self.center_x(), self.center_y())
+    }
+
     pub fn center_x(&self) -> usize {
         self.left() + self.size.width / 2
     }

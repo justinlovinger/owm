@@ -10,6 +10,7 @@ pub struct Problem {
     max_width: EnsureMaxWidth,
     near_in_stack_close: PlaceNearInStackClose,
     reading_order: PlaceInReadingOrder,
+    center_main: CenterMain,
 }
 
 impl Problem {
@@ -22,6 +23,7 @@ impl Problem {
             max_width: EnsureMaxWidth::new(1920, container, window_count),
             near_in_stack_close: PlaceNearInStackClose::new(container, window_count),
             reading_order: PlaceInReadingOrder::new(window_count),
+            center_main: CenterMain::new(container),
         }
     }
 
@@ -33,6 +35,7 @@ impl Problem {
             + 5.0 * self.max_width.evaluate(windows)
             + self.near_in_stack_close.evaluate(windows)
             + self.reading_order.evaluate(windows)
+            + 5.0 * self.center_main.evaluate(windows)
     }
 }
 
@@ -305,6 +308,31 @@ impl PlaceInReadingOrder {
                 })
                 .count() as f64
                 / self.worst_case
+        }
+    }
+}
+
+struct CenterMain {
+    center: Pos,
+    worst_case: f64,
+}
+
+impl CenterMain {
+    fn new(container: Size) -> Self {
+        let center = Pos::new(container.width / 2, container.height / 2);
+        Self {
+            center,
+            worst_case: center
+                .dist(Pos::new(0, 0))
+                .max(center.dist(Pos::new(container.width, container.height)))
+                as f64,
+        }
+    }
+
+    fn evaluate(&self, windows: &[Window]) -> f64 {
+        match windows.get(0) {
+            Some(window) => window.center().dist(self.center) as f64 / self.worst_case,
+            None => 0.0,
         }
     }
 }
@@ -655,5 +683,50 @@ mod tests {
             PlaceInReadingOrder::new(windows.len()).evaluate(&windows),
             0.0
         );
+    }
+
+    #[proptest]
+    fn center_main_returns_values_in_range_0_1(x: ContainedWindows) {
+        prop_assert!((0.0..=1.0).contains(&CenterMain::new(x.container).evaluate(&x.windows)))
+    }
+
+    #[test]
+    fn center_main_returns_1_for_worst_case() {
+        let container = Size {
+            width: 10,
+            height: 10,
+        };
+        let windows = [
+            Window::new(0, 0, 0, 0),
+            Window::new(0, 5, 5, 5),
+            Window::new(0, 0, 10, 10),
+        ];
+        assert_eq!(CenterMain::new(container).evaluate(&windows), 1.0)
+    }
+
+    #[test]
+    fn center_main_returns_0_for_centered_main() {
+        let container = Size {
+            width: 12,
+            height: 12,
+        };
+        let windows = [
+            Window::new(3, 3, 6, 6),
+            Window::new(0, 0, 12, 12),
+            Window::new(0, 5, 5, 5),
+        ];
+        assert_eq!(CenterMain::new(container).evaluate(&windows), 0.0)
+    }
+
+    #[proptest]
+    fn center_main_returns_0_for_full_main(x: ContainedWindows) {
+        assert_eq!(
+            CenterMain::new(x.container).evaluate(
+                &once(Window::new(0, 0, x.container.width, x.container.height))
+                    .chain(x.windows)
+                    .collect_vec()
+            ),
+            0.0
+        )
     }
 }
