@@ -38,7 +38,7 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
                 mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
             }
             .start(decoder.bits(), |points| {
-                decoder.decode(points).map_axis(Axis(1), |windows| {
+                decoder.decode2(points).map_axis(Axis(1), |windows| {
                     problem.evaluate(windows.as_slice().unwrap())
                 })
             }),

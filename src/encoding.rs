@@ -68,12 +68,12 @@ impl Decoder {
 
     pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Window> {
         Array::from_vec(
-            self.decode(bits.into_shape((1, bits.len())).unwrap())
+            self.decode2(bits.into_shape((1, bits.len())).unwrap())
                 .into_raw_vec(),
         )
     }
 
-    pub fn decode(&self, bits: ArrayView2<bool>) -> Array2<Window> {
+    pub fn decode2(&self, bits: ArrayView2<bool>) -> Array2<Window> {
         let mut windows = bits
             .into_shape((
                 bits.nrows(),
