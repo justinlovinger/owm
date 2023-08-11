@@ -23,20 +23,22 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub fn new(container: Size, num_windows: usize) -> Self {
-        let x_max = container.width.saturating_sub(1);
-        let y_max = container.height.saturating_sub(1);
+    pub fn new(min_size: Size, max_size: Size, container: Size, num_windows: usize) -> Self {
+        let x_max = container.width.saturating_sub(min_size.width);
+        let y_max = container.height.saturating_sub(min_size.height);
+        let width_range = min_size.width..=max_size.width;
+        let height_range = min_size.height..=max_size.height;
         let bits_per_x = bits_for(x_max);
         let bits_per_y = bits_for(y_max);
-        let bits_per_width = bits_for(container.width);
-        let bits_per_height = bits_for(container.height);
+        let bits_per_width = bits_for(width_range.end() - width_range.start());
+        let bits_per_height = bits_for(height_range.end() - height_range.start());
         Self {
             container,
             num_windows,
-            x_range: 0.0..=(container.width - 1) as f64,
-            y_range: 0.0..=(container.height - 1) as f64,
-            width_range: 1.0..=container.width as f64,
-            height_range: 1.0..=container.height as f64,
+            x_range: 0.0..=(x_max as f64),
+            y_range: 0.0..=(y_max as f64),
+            width_range: (*width_range.start() as f64)..=(*width_range.end() as f64),
+            height_range: (*height_range.start() as f64)..=(*height_range.end() as f64),
             x_bits_range: 0..bits_per_x,
             y_bits_range: bits_per_x..(bits_per_x + bits_per_y),
             width_bits_range: (bits_per_x + bits_per_y)..(bits_per_x + bits_per_y + bits_per_width),

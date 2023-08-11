@@ -6,8 +6,6 @@ pub struct Problem {
     gaps: MinimizeGaps,
     overlapping: MinimizeOverlapping,
     higher_larger_area: GiveHigherInStackLargerArea,
-    min_size: EnsureMinSize,
-    max_width: EnsureMaxWidth,
     near_in_stack_close: PlaceNearInStackClose,
     reading_order: PlaceInReadingOrder,
     center_main: CenterMain,
@@ -19,8 +17,6 @@ impl Problem {
             gaps: MinimizeGaps::new(container),
             overlapping: MinimizeOverlapping::new(container, window_count),
             higher_larger_area: GiveHigherInStackLargerArea::new(2.0, container, window_count),
-            min_size: EnsureMinSize::new(Size::new(400, 300), window_count),
-            max_width: EnsureMaxWidth::new(1920, container, window_count),
             near_in_stack_close: PlaceNearInStackClose::new(container, window_count),
             reading_order: PlaceInReadingOrder::new(window_count),
             center_main: CenterMain::new(container),
@@ -31,8 +27,6 @@ impl Problem {
         4.0 * self.gaps.evaluate(windows)
             + 2.0 * self.overlapping.evaluate(windows)
             + self.higher_larger_area.evaluate(windows)
-            + 5.0 * self.min_size.evaluate(windows)
-            + 5.0 * self.max_width.evaluate(windows)
             + self.near_in_stack_close.evaluate(windows)
             + self.reading_order.evaluate(windows)
             + 5.0 * self.center_main.evaluate(windows)
@@ -166,80 +160,6 @@ impl GiveHigherInStackLargerArea {
                 .tuple_windows()
                 .map(|(x, y)| (self.ratio * y - x).max(0.0))
                 .sum::<f64>()
-                / self.worst_case
-        }
-    }
-}
-
-struct EnsureMinSize {
-    size: Size,
-    width: f64,
-    height: f64,
-    worst_case: f64,
-}
-
-impl EnsureMinSize {
-    fn new(size: Size, window_count: usize) -> Self {
-        Self {
-            size,
-            width: size.width as f64,
-            height: size.height as f64,
-            worst_case: window_count as f64,
-        }
-    }
-
-    fn evaluate(&self, windows: &[Window]) -> f64 {
-        if windows.is_empty() {
-            0.0
-        } else {
-            windows
-                .iter()
-                .map(
-                    |window| match (self.size.width == 0, self.size.height == 0) {
-                        (true, true) => 0.0,
-                        (true, false) => self.evaluate_height(window),
-                        (false, true) => self.evaluate_width(window),
-                        (false, false) => {
-                            1.0 - ((1.0 - self.evaluate_width(window))
-                                * (1.0 - self.evaluate_height(window)))
-                        }
-                    },
-                )
-                .sum::<f64>()
-                / self.worst_case
-        }
-    }
-
-    fn evaluate_width(&self, window: &Window) -> f64 {
-        self.size.width.saturating_sub(window.size.width) as f64 / self.width
-    }
-
-    fn evaluate_height(&self, window: &Window) -> f64 {
-        self.size.height.saturating_sub(window.size.height) as f64 / self.height
-    }
-}
-
-struct EnsureMaxWidth {
-    max_width: usize,
-    worst_case: f64,
-}
-
-impl EnsureMaxWidth {
-    fn new(max_width: usize, container: Size, window_count: usize) -> Self {
-        Self {
-            max_width,
-            worst_case: container.width.saturating_sub(max_width) as f64 * window_count as f64,
-        }
-    }
-
-    fn evaluate(&self, windows: &[Window]) -> f64 {
-        if windows.is_empty() || self.worst_case == 0.0 {
-            0.0
-        } else {
-            windows
-                .iter()
-                .map(|window| window.size.width.saturating_sub(self.max_width))
-                .sum::<usize>() as f64
                 / self.worst_case
         }
     }
@@ -493,101 +413,6 @@ mod tests {
         ];
         assert_eq!(
             GiveHigherInStackLargerArea::new(2.0, container, windows.len()).evaluate(&windows),
-            0.0
-        )
-    }
-
-    #[proptest]
-    fn ensure_min_size_returns_values_in_range_0_1(
-        #[strategy(
-            ContainedWindows::arbitrary()
-                .prop_flat_map(|x| {
-                    (
-                        (0..=x.container.width, 0..=x.container.height)
-                            .prop_map(|(width, height)| Size { width, height }),
-                        Just(x)
-                    )
-                })
-        )]
-        x: (Size, ContainedWindows),
-    ) {
-        prop_assert!((0.0..=1.0)
-            .contains(&EnsureMinSize::new(x.0, x.1.windows.len()).evaluate(&x.1.windows)))
-    }
-
-    #[proptest]
-    fn ensure_min_size_returns_1_for_worst_case(
-        size: Size,
-        #[strategy((1_usize..=16))] count: usize,
-    ) {
-        assert_eq!(
-            EnsureMinSize::new(size, count)
-                .evaluate(&repeat(Window::new(0, 0, 0, 0)).take(count).collect_vec()),
-            1.0
-        )
-    }
-
-    #[test]
-    fn ensure_min_size_returns_0_for_best_case() {
-        let size = Size {
-            width: 5,
-            height: 5,
-        };
-        let windows = [
-            Window::new(0, 0, 10, 10),
-            Window::new(0, 0, 5, 5),
-            Window::new(0, 0, 10, 5),
-        ];
-        assert_eq!(
-            EnsureMinSize::new(size, windows.len()).evaluate(&windows),
-            0.0
-        )
-    }
-
-    #[proptest]
-    fn ensure_max_width_returns_values_in_range_0_1(
-        #[strategy(
-            ContainedWindows::arbitrary()
-                .prop_flat_map(|x| (0..=x.container.width, Just(x)))
-        )]
-        x: (usize, ContainedWindows),
-    ) {
-        prop_assert!((0.0..=1.0).contains(
-            &EnsureMaxWidth::new(x.0, x.1.container, x.1.windows.len()).evaluate(&x.1.windows)
-        ))
-    }
-
-    #[proptest]
-    fn ensure_max_width_returns_1_for_worst_case(
-        #[strategy(Size::arbitrary().prop_flat_map(|x| (0..x.width, Just(x))))] params: (
-            usize,
-            Size,
-        ),
-        #[strategy((1_usize..=16))] count: usize,
-    ) {
-        assert_eq!(
-            EnsureMaxWidth::new(params.0, params.1, count).evaluate(
-                &repeat(Window::new(0, 0, params.1.width, 0))
-                    .take(count)
-                    .collect_vec()
-            ),
-            1.0
-        )
-    }
-
-    #[test]
-    fn ensure_max_width_returns_0_for_best_case() {
-        let container = Size {
-            width: 10,
-            height: 5,
-        };
-        let windows = [
-            Window::new(0, 0, 5, 10),
-            Window::new(0, 0, 4, 5),
-            Window::new(0, 0, 0, 0),
-        ];
-        assert_eq!(
-            EnsureMaxWidth::new(5, container, windows.len()).evaluate(&windows),
             0.0
         )
     }

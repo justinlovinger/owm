@@ -26,7 +26,7 @@ impl Arbitrary for ContainedWindows {
 
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         (Size::arbitrary(), 0_usize..=16)
-            .prop_map(|(size, count)| Decoder::new(size, count))
+            .prop_map(|(size, count)| Decoder::new(Size::new(0, 0), size, size, count))
             .prop_flat_map(|decoder| {
                 vec(bool::arbitrary(), decoder.bits()).prop_map(move |bits| ContainedWindows {
                     windows: decoder.decode1(Array::from_vec(bits).view()).into_raw_vec(),

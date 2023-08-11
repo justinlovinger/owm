@@ -19,7 +19,12 @@ use crate::{
 
 pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
     let container = Size { width, height };
-    let decoder = Decoder::new(container, count);
+    let decoder = Decoder::new(
+        Size::new(400, 300),
+        Size::new(1920, container.height),
+        container,
+        count,
+    );
     let problem = Problem::new(container, count);
     let mut windows = decoder.decode1(
         UntilConvergedConfig {
