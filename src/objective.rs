@@ -24,12 +24,12 @@ impl Problem {
     }
 
     pub fn evaluate(&self, windows: &[Window]) -> f64 {
-        4.0 * self.gaps.evaluate(windows)
+        3.0 * self.gaps.evaluate(windows)
             + 2.0 * self.overlapping.evaluate(windows)
             + 1.5 * self.higher_larger_area.evaluate(windows)
-            + self.near_in_stack_close.evaluate(windows)
-            + self.reading_order.evaluate(windows)
-            + self.center_main.evaluate(windows)
+            + 0.5 * self.near_in_stack_close.evaluate(windows)
+            + 0.5 * self.reading_order.evaluate(windows)
+            + 3.0 * self.center_main.evaluate(windows)
     }
 }
 
