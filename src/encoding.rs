@@ -4,12 +4,13 @@ use ndarray::prelude::*;
 
 use crate::{
     binary::ToFracLE,
-    post_processing::trim_off_screen,
+    post_processing::{overlap_borders, remove_gaps, trim_off_screen},
     types::{Size, Window},
 };
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
+    max_size: Size,
     container: Size,
     num_windows: usize,
     x_decoder: ToFracLE<f64>,
@@ -38,6 +39,7 @@ impl Decoder {
         let bits_per_width = bits_for(width_range.end() - width_range.start());
         let bits_per_height = bits_for(height_range.end() - height_range.start());
         Self {
+            max_size,
             container,
             num_windows,
             x_decoder: ToFracLE::new(0.0..=(x_max as f64), bits_per_x),
@@ -108,6 +110,8 @@ impl Decoder {
             });
         for mut windows in windows.axis_iter_mut(Axis(0)) {
             trim_off_screen(self.container, windows.view_mut());
+            remove_gaps(self.max_size, self.container, windows.view_mut());
+            overlap_borders(1, self.container, windows.view_mut());
         }
         windows
     }
