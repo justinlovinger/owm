@@ -19,9 +19,10 @@ use crate::{
 
 pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
     let container = Size { width, height };
+    let max_size = Size::new(1920.min(container.width), container.height);
     let decoder = Decoder::new(
         Size::new(320.min(container.width), 180.min(container.height)),
-        Size::new(1920.min(container.width), container.height),
+        max_size,
         container,
         count,
     );
@@ -45,7 +46,7 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
         )
         .view(),
     );
-    remove_gaps(container, windows.view_mut());
+    remove_gaps(max_size, container, windows.view_mut());
     overlap_borders(1, container, windows.view_mut());
     windows.into_raw_vec()
 }

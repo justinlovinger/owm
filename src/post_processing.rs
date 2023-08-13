@@ -12,7 +12,10 @@ pub fn trim_off_screen(container: Size, mut windows: ArrayViewMut1<Window>) {
     }
 }
 
-pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
+pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<Window>) {
+    debug_assert!(max_size.width <= container.width);
+    debug_assert!(max_size.height <= container.height);
+
     let flip_flop = |dist, x: usize, y: usize| {
         let x_ = x.min(div_ceil(dist, 2));
         let y = y.min(dist - x_);
@@ -30,11 +33,18 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
         })
         .collect_vec();
     loop {
+        // These bounds may overestimate.
+        // However,
+        // for the algorithm to work
+        // they only need to not underestimate,
+        // as long as they are accurate
+        // when freedom is zero.
         let x_rays = windows
             .iter()
             .zip(freedoms.iter())
             .map(|(window, freedoms)| {
                 let y_range = window.y_range();
+                let max_free = max_size.width.saturating_sub(window.size.width);
                 let left = if freedoms.left == 0 {
                     window.left()
                 } else {
@@ -46,6 +56,7 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
                         .map(|other| other.right())
                         .max()
                         .map_or(0, |x| x + 1)
+                        .max(window.left().saturating_sub(max_free))
                 };
                 let right = if freedoms.right == 0 {
                     window.right()
@@ -58,6 +69,7 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
                         .map(|other| other.left())
                         .min()
                         .map_or(container.width, |x| x - 1)
+                        .min(window.right() + max_free)
                 };
                 left..=right
             })
@@ -67,6 +79,7 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
             .zip(freedoms.iter())
             .map(|(window, freedoms)| {
                 let x_range = window.x_range();
+                let max_free = max_size.height.saturating_sub(window.size.height);
                 let top = if freedoms.top == 0 {
                     window.top()
                 } else {
@@ -78,6 +91,7 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
                         .map(|other| other.bottom())
                         .max()
                         .map_or(0, |x| x + 1)
+                        .max(window.top().saturating_sub(max_free))
                 };
                 let bottom = if freedoms.bottom == 0 {
                     window.bottom()
@@ -90,16 +104,27 @@ pub fn remove_gaps(container: Size, mut windows: ArrayViewMut1<Window>) {
                         .map(|other| other.top())
                         .min()
                         .map_or(container.height, |x| x - 1)
+                        .min(window.bottom() + max_free)
                 };
                 top..=bottom
             })
             .collect_vec();
 
         for (window, freedoms) in windows.iter().zip(freedoms.iter_mut()) {
-            freedoms.left = window.left();
-            freedoms.right = container.width.saturating_sub(window.right());
-            freedoms.top = window.top();
-            freedoms.bottom = container.height.saturating_sub(window.bottom());
+            let (left, right) = flip_flop(
+                max_size.width.saturating_sub(window.size.width),
+                window.left(),
+                container.width.saturating_sub(window.right()),
+            );
+            freedoms.left = left;
+            freedoms.right = right;
+            let (top, bottom) = flip_flop(
+                max_size.height.saturating_sub(window.size.height),
+                window.top(),
+                container.height.saturating_sub(window.bottom()),
+            );
+            freedoms.top = top;
+            freedoms.bottom = bottom;
         }
         for (
             ((i, window), (x_ray, y_ray)),
@@ -455,7 +480,34 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
+    use crate::testing::ContainedWindows;
+
     use super::*;
+
+    #[proptest]
+    fn remove_gaps_respects_max_size(
+        #[strategy(
+            ContainedWindows::arbitrary().prop_flat_map(|x| {
+                (
+                    (
+                        x.windows.iter().map(|x| x.size.width).max().unwrap_or(0)..=x.container.width,
+                        x.windows.iter().map(|x| x.size.height).max().unwrap_or(0)..=x.container.height,
+                    )
+                        .prop_map(|(width, height)| Size::new(width, height)),
+                    Just(x)
+                )
+            })
+        )]
+        params: (Size, ContainedWindows),
+    ) {
+        let max_size = params.0;
+        let mut windows = Array::from(params.1.windows);
+        remove_gaps(max_size, params.1.container, windows.view_mut());
+        for window in windows {
+            prop_assert!(window.size.width <= max_size.width);
+            prop_assert!(window.size.height <= max_size.height);
+        }
+    }
 
     #[test]
     fn intersects_works_for_simple_cases() {
