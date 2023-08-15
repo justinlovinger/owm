@@ -239,7 +239,8 @@ pub fn overlap_borders(
     container: Size,
     mut windows: ArrayViewMut1<Window>,
 ) {
-    let border_thickness_ceil = div_ceil(border_thickness, 2);
+    let border_thickness_half_ceil = div_ceil(border_thickness, 2);
+    let border_thickness_half = border_thickness / 2;
 
     let filter_map = |i,
                       other_i,
@@ -247,7 +248,7 @@ pub fn overlap_borders(
                       other_range: RangeExclusive<usize>,
                       left,
                       right| {
-        if i != other_i && range.intersects(other_range) && left > right {
+        if i != other_i && range.intersects(other_range) && left >= right {
             Some((left - right, other_i))
         } else {
             None
@@ -345,7 +346,9 @@ pub fn overlap_borders(
         match borders.left {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_left(border_thickness_ceil);
+                    window.expand_left(border_thickness_half_ceil);
+                } else {
+                    window.expand_left(border_thickness_half);
                 }
             }
             None => {
@@ -355,7 +358,9 @@ pub fn overlap_borders(
         match borders.right {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_right(border_thickness_ceil);
+                    window.expand_right(border_thickness_half_ceil);
+                } else {
+                    window.expand_right(border_thickness_half);
                 }
             }
             None => {
@@ -367,7 +372,9 @@ pub fn overlap_borders(
         match borders.top {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_top(border_thickness_ceil);
+                    window.expand_top(border_thickness_half_ceil);
+                } else {
+                    window.expand_top(border_thickness_half);
                 }
             }
             None => {
@@ -377,7 +384,9 @@ pub fn overlap_borders(
         match borders.bottom {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_bottom(border_thickness_ceil);
+                    window.expand_bottom(border_thickness_half_ceil);
+                } else {
+                    window.expand_bottom(border_thickness_half);
                 }
             }
             None => {
@@ -385,55 +394,6 @@ pub fn overlap_borders(
                     border_thickness.min(container.height.saturating_sub(window.bottom())),
                 );
             }
-        }
-    }
-
-    let borders = borders
-        .into_iter()
-        .enumerate()
-        .map(|(i, borders)| Sides {
-            left: borders.left.and_then(|other_i| {
-                if i > other_i {
-                    Some(windows[other_i].right())
-                } else {
-                    None
-                }
-            }),
-            right: borders.right.and_then(|other_i| {
-                if i > other_i {
-                    Some(windows[other_i].left())
-                } else {
-                    None
-                }
-            }),
-            top: borders.top.and_then(|other_i| {
-                if i > other_i {
-                    Some(windows[other_i].bottom())
-                } else {
-                    None
-                }
-            }),
-            bottom: borders.bottom.and_then(|other_i| {
-                if i > other_i {
-                    Some(windows[other_i].top())
-                } else {
-                    None
-                }
-            }),
-        })
-        .collect_vec();
-    for (window, borders) in windows.iter_mut().zip(borders) {
-        if let Some(right) = borders.left {
-            window.expand_left(window.left() - right);
-        }
-        if let Some(left) = borders.right {
-            window.expand_right(left - window.right());
-        }
-        if let Some(bottom) = borders.top {
-            window.expand_top(window.top() - bottom);
-        }
-        if let Some(top) = borders.bottom {
-            window.expand_bottom(top - window.bottom());
         }
     }
 }
@@ -546,6 +506,55 @@ mod tests {
             prop_assert!(window.size.width <= args.max_size.width);
             prop_assert!(window.size.height <= args.max_size.height);
         }
+    }
+
+    #[proptest]
+    fn overlap_borders_does_not_expand_past_container(
+        #[strategy(1_usize..=32)] border_thickness: usize,
+        container: Size,
+    ) {
+        let init_windows = [Window::new(0, 0, container.width, container.height)];
+        let mut windows = arr1(&init_windows);
+        overlap_borders(border_thickness, container, windows.view_mut());
+        assert_eq!(windows.into_raw_vec(), init_windows)
+    }
+
+    #[test]
+    fn overlap_borders_expands_windows_evenly() {
+        let container = Size::new(10, 10);
+        let mut windows = arr1(&[
+            Window::new(0, 0, 10, 5),
+            Window::new(0, 5, 5, 5),
+            Window::new(5, 5, 5, 5),
+        ]);
+        overlap_borders(2, container, windows.view_mut());
+        assert_eq!(
+            windows,
+            arr1(&[
+                Window::new(0, 0, 10, 6),
+                Window::new(0, 4, 6, 6),
+                Window::new(4, 4, 6, 6),
+            ]),
+        )
+    }
+
+    #[test]
+    fn overlap_borders_breaks_ties_in_favor_of_higher_windows() {
+        let container = Size::new(10, 10);
+        let mut windows = arr1(&[
+            Window::new(0, 0, 10, 5),
+            Window::new(0, 5, 5, 5),
+            Window::new(5, 5, 5, 5),
+        ]);
+        overlap_borders(1, container, windows.view_mut());
+        assert_eq!(
+            windows,
+            arr1(&[
+                Window::new(0, 0, 10, 6),
+                Window::new(0, 5, 6, 5),
+                Window::new(5, 5, 5, 5),
+            ]),
+        )
     }
 
     #[test]
