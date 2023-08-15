@@ -4,7 +4,7 @@ use ndarray::prelude::*;
 
 use crate::{
     binary::ToFracLE,
-    post_processing::{overlap_borders, remove_gaps, trim_off_screen},
+    post_processing::{remove_gaps, trim_off_screen},
     types::{Size, Window},
 };
 
@@ -68,11 +68,6 @@ impl Decoder {
         self.height_bits_range.end
     }
 
-    #[cfg(test)]
-    pub fn container(&self) -> Size {
-        self.container
-    }
-
     pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Window> {
         Array::from_vec(
             self.decode2(bits.into_shape((1, bits.len())).unwrap())
@@ -111,7 +106,6 @@ impl Decoder {
         for mut windows in windows.axis_iter_mut(Axis(0)) {
             trim_off_screen(self.container, windows.view_mut());
             remove_gaps(self.max_size, self.container, windows.view_mut());
-            overlap_borders(1, self.container, windows.view_mut());
         }
         windows
     }

@@ -10,6 +10,7 @@ mod testing;
 use encoding::Decoder;
 use ndarray::Axis;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+use post_processing::overlap_borders;
 
 use crate::objective::Problem;
 pub use crate::types::{Pos, Size, Window};
@@ -24,25 +25,25 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
         count,
     );
     let problem = Problem::new(container, count);
-    decoder
-        .decode1(
-            UntilConvergedConfig {
-                threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
+    let mut windows = decoder.decode1(
+        UntilConvergedConfig {
+            threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
+        }
+        .argmin(
+            &mut Config {
+                num_samples: NumSamples::new(200).unwrap(),
+                adjust_rate: AdjustRate::new(0.1).unwrap(),
+                mutation_chance: MutationChance::new(0.0).unwrap(),
+                mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
             }
-            .argmin(
-                &mut Config {
-                    num_samples: NumSamples::new(200).unwrap(),
-                    adjust_rate: AdjustRate::new(0.1).unwrap(),
-                    mutation_chance: MutationChance::new(0.0).unwrap(),
-                    mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
-                }
-                .start(decoder.bits(), |points| {
-                    decoder.decode2(points).map_axis(Axis(1), |windows| {
-                        problem.evaluate(windows.as_slice().unwrap())
-                    })
-                }),
-            )
-            .view(),
+            .start(decoder.bits(), |points| {
+                decoder.decode2(points).map_axis(Axis(1), |windows| {
+                    problem.evaluate(windows.as_slice().unwrap())
+                })
+            }),
         )
-        .into_raw_vec()
+        .view(),
+    );
+    overlap_borders(1, container, windows.view_mut());
+    windows.into_raw_vec()
 }

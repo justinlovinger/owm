@@ -1,4 +1,6 @@
-use std::ops::RangeInclusive;
+use std::cmp::PartialOrd;
+
+use itertools::Itertools;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
@@ -100,12 +102,12 @@ impl Window {
         self.size.height += value;
     }
 
-    pub fn x_range(&self) -> RangeInclusive<usize> {
-        self.left()..=self.right()
+    pub fn x_range_exclusive(&self) -> RangeExclusive<usize> {
+        RangeExclusive(self.left(), self.right())
     }
 
-    pub fn y_range(&self) -> RangeInclusive<usize> {
-        self.top()..=self.bottom()
+    pub fn y_range_exclusive(&self) -> RangeExclusive<usize> {
+        RangeExclusive(self.top(), self.bottom())
     }
 
     pub fn area(&self) -> usize {
@@ -167,5 +169,117 @@ impl From<Size> for Pos {
             x: value.width,
             y: value.height,
         }
+    }
+}
+
+// Adapted from a solution by `m-hgn` on Code Wars,
+// <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
+// This could be optimized using segment trees.
+/// Return the total area of a union of rectangles.
+pub fn covered_area(windows: &[Window]) -> usize {
+    let mut xs = windows
+        .iter()
+        .flat_map(|window| [window.left(), window.right()])
+        .collect_vec();
+    xs.sort();
+    xs.dedup();
+
+    let mut windows = windows.to_vec();
+    windows.sort_by_key(|window| window.top());
+
+    xs.into_iter()
+        .tuple_windows()
+        .map(|(left, right)| {
+            let width = right - left;
+            let mut last_y2 = usize::MIN;
+            windows
+                .iter()
+                .filter(|window| window.left() <= left && right <= window.right())
+                .map(|window| {
+                    let ret = width * window.bottom().saturating_sub(last_y2.max(window.top()));
+                    last_y2 = window.bottom().max(last_y2);
+                    ret
+                })
+                .sum::<usize>()
+        })
+        .sum()
+}
+
+/// Return the total area obscured in a set of rectangles.
+/// If `n` rectangles are overlapped by an `n + 1`th rectangle,
+/// the overlapped area will be counted `n` times,
+/// but not `n + 1` times.
+pub fn obscured_area(windows: &[Window]) -> usize {
+    if windows.len() < 2 {
+        0
+    } else {
+        let overlaps = windows
+            .iter()
+            .enumerate()
+            .map(|(i, window)| {
+                windows
+                    .iter()
+                    .enumerate()
+                    .filter(|(other_i, _)| i != *other_i)
+                    .filter_map(|(_, other)| window.overlap(other))
+                    .collect_vec()
+            })
+            .collect_vec();
+        overlaps.iter().map(|x| covered_area(x)).sum::<usize>()
+            - covered_area(&overlaps.into_iter().flatten().collect_vec())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RangeExclusive<T>(pub T, pub T);
+
+impl<T> RangeExclusive<T> {
+    pub fn intersects(self, other: RangeExclusive<T>) -> bool
+    where
+        T: Copy + PartialOrd,
+    {
+        self == other || self.contains_either(other) || other.contains_either(self)
+    }
+
+    fn contains_either(self, other: RangeExclusive<T>) -> bool
+    where
+        T: Copy + PartialOrd,
+    {
+        self.contains(other.0) || self.contains(other.1)
+    }
+
+    pub fn contains(self, x: T) -> bool
+    where
+        T: Copy + PartialOrd,
+    {
+        x > self.0 && x < self.1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+    use test_strategy::proptest;
+
+    use super::*;
+
+    #[test]
+    fn range_exclusive_intersects_works_for_simple_cases() {
+        assert!(RangeExclusive(0, 2).intersects(RangeExclusive(1, 2)));
+        assert!(RangeExclusive(0, 3).intersects(RangeExclusive(1, 2)));
+        assert!(!RangeExclusive(0, 1).intersects(RangeExclusive(1, 2)));
+    }
+
+    #[proptest]
+    fn range_exclusive_intersects_with_itself(x: RangeExclusive<usize>) {
+        prop_assert!(x.intersects(x));
+    }
+
+    #[proptest]
+    fn range_exclusive_intersects_is_symmetrical(
+        x: RangeExclusive<usize>,
+        y: RangeExclusive<usize>,
+    ) {
+        prop_assert_eq!(x.intersects(y), y.intersects(x));
     }
 }

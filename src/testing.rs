@@ -1,7 +1,40 @@
-use ndarray::prelude::*;
 use proptest::prelude::{prop::collection::vec, *};
 
-use crate::{encoding::Decoder, Size, Window};
+use crate::{types::RangeExclusive, Size, Window};
+
+#[derive(Debug, Clone)]
+pub struct ContainedWindows {
+    pub container: Size,
+    pub windows: Vec<Window>,
+}
+
+pub struct NumWindowsRange(pub usize, pub usize);
+
+impl Default for NumWindowsRange {
+    fn default() -> Self {
+        Self(0, 16)
+    }
+}
+
+impl Arbitrary for ContainedWindows {
+    type Parameters = NumWindowsRange;
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(range: Self::Parameters) -> Self::Strategy {
+        (Size::arbitrary(), range.0..=range.1)
+            .prop_flat_map(|(container, count)| {
+                vec(
+                    (0..container.width, 0..container.height).prop_flat_map(move |(x, y)| {
+                        (1..=container.width - x, 1..=container.height - y)
+                            .prop_map(move |(width, height)| Window::new(x, y, width, height))
+                    }),
+                    count,
+                )
+                .prop_map(move |windows| ContainedWindows { container, windows })
+            })
+            .boxed()
+    }
+}
 
 impl Arbitrary for Size {
     type Parameters = ();
@@ -14,25 +47,18 @@ impl Arbitrary for Size {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ContainedWindows {
-    pub container: Size,
-    pub windows: Vec<Window>,
-}
-
-impl Arbitrary for ContainedWindows {
-    type Parameters = ();
+impl<T> Arbitrary for RangeExclusive<T>
+where
+    T: Arbitrary,
+    T::Parameters: Clone,
+    T::Strategy: 'static,
+{
+    type Parameters = T::Parameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        (Size::arbitrary(), 0_usize..=16)
-            .prop_map(|(size, count)| Decoder::new(Size::new(0, 0), size, size, count))
-            .prop_flat_map(|decoder| {
-                vec(bool::arbitrary(), decoder.bits()).prop_map(move |bits| ContainedWindows {
-                    windows: decoder.decode1(Array::from_vec(bits).view()).into_raw_vec(),
-                    container: decoder.container(),
-                })
-            })
+    fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+        (T::arbitrary_with(args.clone()), T::arbitrary_with(args))
+            .prop_map(|(x, y)| RangeExclusive(x, y))
             .boxed()
     }
 }

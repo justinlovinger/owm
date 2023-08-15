@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::types::{Pos, Size, Window};
+use crate::types::{covered_area, obscured_area, Pos, Size, Window};
 
 pub struct Problem {
     gaps: MinimizeGaps,
@@ -73,64 +73,6 @@ impl MinimizeOverlapping {
         } else {
             obscured_area(windows) as f64 / self.worst_case
         }
-    }
-}
-
-// Adapted from a solution by `m-hgn` on Code Wars,
-// <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
-// This could be optimized using segment trees.
-/// Return the total area of a union of rectangles.
-fn covered_area(windows: &[Window]) -> usize {
-    let mut xs = windows
-        .iter()
-        .flat_map(|window| [window.left(), window.right()])
-        .collect_vec();
-    xs.sort();
-    xs.dedup();
-
-    let mut windows = windows.to_vec();
-    windows.sort_by_key(|window| window.top());
-
-    xs.into_iter()
-        .tuple_windows()
-        .map(|(left, right)| {
-            let width = right - left;
-            let mut last_y2 = usize::MIN;
-            windows
-                .iter()
-                .filter(|window| window.left() <= left && right <= window.right())
-                .map(|window| {
-                    let ret = width * window.bottom().saturating_sub(last_y2.max(window.top()));
-                    last_y2 = window.bottom().max(last_y2);
-                    ret
-                })
-                .sum::<usize>()
-        })
-        .sum()
-}
-
-/// Return the total area obscured in a set of rectangles.
-/// If `n` rectangles are overlapped by an `n + 1`th rectangle,
-/// the overlapped area will be counted `n` times,
-/// but not `n + 1` times.
-fn obscured_area(windows: &[Window]) -> usize {
-    if windows.len() < 2 {
-        0
-    } else {
-        let overlaps = windows
-            .iter()
-            .enumerate()
-            .map(|(i, window)| {
-                windows
-                    .iter()
-                    .enumerate()
-                    .filter(|(other_i, _)| i != *other_i)
-                    .filter_map(|(_, other)| window.overlap(other))
-                    .collect_vec()
-            })
-            .collect_vec();
-        overlaps.iter().map(|x| covered_area(x)).sum::<usize>()
-            - covered_area(&overlaps.into_iter().flatten().collect_vec())
     }
 }
 
