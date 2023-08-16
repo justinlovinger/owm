@@ -4,13 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.3.21", features = ["derive"] }
+derive_more = "0.99.17"
 itertools = "0.11.0"
 ndarray = "0.15.6"
 num-traits = "0.2.16"
 once_cell = "1.18.0"
 optimal = { git = "https://github.com/justinlovinger/optimal-rs.git" }
+paste = "1.0.14"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
+thiserror = "1.0.46"
 wayland-client = "0.30.2"
 wayland-scanner = "0.30.1"
 

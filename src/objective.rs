@@ -1,8 +1,16 @@
-use itertools::Itertools;
+use std::ops::Mul;
 
-use crate::rect::{covered_area, obscured_area, Pos, Rect, Size};
+use derive_more::Display;
+use itertools::Itertools;
+use num_traits::bounds::LowerBounded;
+
+use crate::{
+    derive::*,
+    rect::{covered_area, obscured_area, Pos, Rect, Size},
+};
 
 pub struct Problem {
+    weights: Weights,
     gaps: MinimizeGaps,
     overlapping: MinimizeOverlapping,
     area_ratio: MaintainAreaRatio,
@@ -11,12 +19,57 @@ pub struct Problem {
     center_main: CenterMain,
 }
 
-impl Problem {
-    pub fn new(container: Size, count: usize) -> Self {
+#[derive(Clone, Copy, Debug)]
+pub struct Weights {
+    pub gaps_weight: Weight,
+    pub overlapping_weight: Weight,
+    pub area_ratio_weight: Weight,
+    pub adjacent_close_weight: Weight,
+    pub reading_order_weight: Weight,
+    pub center_main_weight: Weight,
+}
+
+impl Default for Weights {
+    fn default() -> Self {
         Self {
+            gaps_weight: Weight(3.0),
+            overlapping_weight: Weight(2.0),
+            area_ratio_weight: Weight(1.5),
+            adjacent_close_weight: Weight(0.5),
+            reading_order_weight: Weight(0.5),
+            center_main_weight: Weight(3.0),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
+pub struct Weight(f64);
+
+impl LowerBounded for Weight {
+    fn min_value() -> Self {
+        Self(0.0)
+    }
+}
+
+derive_new_from_lower_bounded_float!(Weight(f64));
+derive_try_from_from_new!(Weight(f64));
+derive_from_str_from_try_into!(Weight(f64));
+
+impl Mul<f64> for Weight {
+    type Output = f64;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        self.0 * rhs
+    }
+}
+
+impl Problem {
+    pub fn new(weights: Weights, area_ratio: Ratio, container: Size, count: usize) -> Self {
+        Self {
+            weights,
             gaps: MinimizeGaps::new(container),
             overlapping: MinimizeOverlapping::new(container, count),
-            area_ratio: MaintainAreaRatio::new(2.0, container, count),
+            area_ratio: MaintainAreaRatio::new(area_ratio, container, count),
             adjacent_close: PlaceAdjacentClose::new(container, count),
             reading_order: PlaceInReadingOrder::new(count),
             center_main: CenterMain::new(container),
@@ -24,12 +77,31 @@ impl Problem {
     }
 
     pub fn evaluate(&self, rects: &[Rect]) -> f64 {
-        3.0 * self.gaps.evaluate(rects)
-            + 2.0 * self.overlapping.evaluate(rects)
-            + 1.5 * self.area_ratio.evaluate(rects)
-            + 0.5 * self.adjacent_close.evaluate(rects)
-            + 0.5 * self.reading_order.evaluate(rects)
-            + 3.0 * self.center_main.evaluate(rects)
+        (if self.weights.gaps_weight > Weight(0.0) {
+            self.weights.gaps_weight * self.gaps.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.overlapping_weight > Weight(0.0) {
+            self.weights.overlapping_weight * self.overlapping.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.area_ratio_weight > Weight(0.0) {
+            self.weights.area_ratio_weight * self.area_ratio.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.adjacent_close_weight > Weight(0.0) {
+            self.weights.adjacent_close_weight * self.adjacent_close.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.reading_order_weight > Weight(0.0) {
+            self.weights.reading_order_weight * self.reading_order.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.center_main_weight > Weight(0.0) {
+            self.weights.center_main_weight * self.center_main.evaluate(rects)
+        } else {
+            0.0
+        })
     }
 }
 
@@ -77,19 +149,39 @@ impl MinimizeOverlapping {
 }
 
 struct MaintainAreaRatio {
-    ratio: f64,
+    ratio: Ratio,
     worst_case: f64,
 }
 
+#[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
+pub struct Ratio(f64);
+
+impl LowerBounded for Ratio {
+    fn min_value() -> Self {
+        Self(1.0)
+    }
+}
+
+derive_new_from_lower_bounded_float!(Ratio(f64));
+derive_try_from_from_new!(Ratio(f64));
+derive_from_str_from_try_into!(Ratio(f64));
+
+impl Mul<f64> for Ratio {
+    type Output = f64;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        self.0 * rhs
+    }
+}
+
 impl MaintainAreaRatio {
-    fn new(ratio: f64, container: Size, count: usize) -> Self {
-        debug_assert!(ratio >= 1.0);
+    fn new(ratio: Ratio, container: Size, count: usize) -> Self {
         Self {
             ratio,
             // The first pair can be `container.area()` apart in area,
             // but then remaining pairs can only be equal at worst.
             worst_case: ratio * container.area() as f64
-                + (ratio - 1.0) * (container.area() * count.saturating_sub(2)) as f64,
+                + (ratio.0 - 1.0) * (container.area() * count.saturating_sub(2)) as f64,
         }
     }
 
@@ -316,7 +408,8 @@ mod tests {
         x: ContainedRects,
     ) {
         prop_assert!((0.0..=1.0).contains(
-            &MaintainAreaRatio::new(ratio, x.container, x.rects.len()).evaluate(&x.rects)
+            &MaintainAreaRatio::new(Ratio::new(ratio).unwrap(), x.container, x.rects.len())
+                .evaluate(&x.rects)
         ))
     }
 
@@ -340,7 +433,7 @@ mod tests {
             Rect::new(0, 0, 10, 10),
         ];
         assert_eq!(
-            MaintainAreaRatio::new(2.0, container, rects.len()).evaluate(&rects),
+            MaintainAreaRatio::new(Ratio(2.0), container, rects.len()).evaluate(&rects),
             1.0
         )
     }
@@ -357,7 +450,7 @@ mod tests {
             Rect::new(0, 0, 5, 5),
         ];
         assert_eq!(
-            MaintainAreaRatio::new(2.0, container, rects.len()).evaluate(&rects),
+            MaintainAreaRatio::new(Ratio(2.0), container, rects.len()).evaluate(&rects),
             0.0
         )
     }

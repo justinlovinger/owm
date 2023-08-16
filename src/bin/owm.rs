@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use clap::Parser;
 use once_cell::sync::Lazy;
-use owm::{layout, Rect};
+use owm::{LayoutGen, LayoutGenBuilder, Ratio, Rect, Size, Weight};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -22,8 +23,88 @@ use crate::protocol::{
     zriver_control_v1::ZriverControlV1,
 };
 
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[arg(long)]
+    min_width: Option<usize>,
+
+    #[arg(long)]
+    min_height: Option<usize>,
+
+    #[arg(long)]
+    max_width: Option<Option<usize>>,
+
+    #[arg(long)]
+    max_height: Option<Option<usize>>,
+
+    /// Weight of "minimize gaps" objective
+    #[arg(long)]
+    gaps_weight: Option<Weight>,
+
+    /// Weight of "minimize overlapping" objective
+    #[arg(long)]
+    overlapping_weight: Option<Weight>,
+
+    /// Weight of "maintain area ratio" objective
+    #[arg(long)]
+    area_ratio_weight: Option<Weight>,
+
+    /// Desired area ratio between each window and the next
+    #[arg(long)]
+    area_ratio: Option<Ratio>,
+
+    /// Weight of "place adjacent close" objective
+    #[arg(long)]
+    adjacent_close_weight: Option<Weight>,
+
+    /// Weight of "place in reading order" objective
+    #[arg(long)]
+    reading_order_weight: Option<Weight>,
+
+    /// Weight of "center main" objective
+    #[arg(long)]
+    center_main_weight: Option<Weight>,
+}
+
 fn main() {
-    let mut layout_manager = LayoutManager::default();
+    let args = Args::parse();
+
+    let mut builder = LayoutGenBuilder::new();
+    if let Some(min_width) = args.min_width {
+        builder = builder.min_width(min_width);
+    }
+    if let Some(min_height) = args.min_height {
+        builder = builder.min_height(min_height);
+    }
+    if let Some(max_width) = args.max_width {
+        builder = builder.max_width(max_width);
+    }
+    if let Some(max_height) = args.max_height {
+        builder = builder.max_height(max_height);
+    }
+    if let Some(gaps_weight) = args.gaps_weight {
+        builder = builder.gaps_weight(gaps_weight);
+    }
+    if let Some(overlapping_weight) = args.overlapping_weight {
+        builder = builder.overlapping_weight(overlapping_weight);
+    }
+    if let Some(area_ratio_weight) = args.area_ratio_weight {
+        builder = builder.area_ratio_weight(area_ratio_weight);
+    }
+    if let Some(adjacent_close_weight) = args.adjacent_close_weight {
+        builder = builder.adjacent_close_weight(adjacent_close_weight);
+    }
+    if let Some(reading_order_weight) = args.reading_order_weight {
+        builder = builder.reading_order_weight(reading_order_weight);
+    }
+    if let Some(center_main_weight) = args.center_main_weight {
+        builder = builder.center_main_weight(center_main_weight);
+    }
+    if let Some(area_ratio) = args.area_ratio {
+        builder = builder.area_ratio(area_ratio);
+    }
+    let mut layout_manager = LayoutManager::new(builder.build());
 
     let conn = Connection::connect_to_env().unwrap();
     let mut event_queue = conn.new_event_queue();
@@ -45,6 +126,7 @@ impl OutputId {
 }
 
 pub struct LayoutManager {
+    gen: LayoutGen,
     // These will be initialized
     // by Wayland events.
     seat: Option<Arc<WlSeat>>,
@@ -53,18 +135,13 @@ pub struct LayoutManager {
 }
 
 impl LayoutManager {
-    pub fn new() -> Self {
+    pub fn new(gen: LayoutGen) -> Self {
         Self {
+            gen,
             seat: None,
             manager: None,
             control: None,
         }
-    }
-}
-
-impl Default for LayoutManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -163,16 +240,15 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 tags: _,
                 serial,
             } => {
-                type Key = (usize, usize, usize);
+                type Key = (Size, usize);
                 static CACHE: Lazy<Mutex<HashMap<Key, Vec<Rect>>>> =
                     Lazy::new(|| Mutex::new(HashMap::new()));
                 static STARTED: Lazy<Mutex<HashSet<Key>>> =
                     Lazy::new(|| Mutex::new(HashSet::new()));
 
-                let usable_width = usable_width as usize;
-                let usable_height = usable_height as usize;
+                let container = Size::new(usable_width as usize, usable_height as usize);
                 let view_count = view_count as usize;
-                let key = (usable_width, usable_height, view_count);
+                let key = (container, view_count);
 
                 match CACHE.lock().unwrap().get(&key) {
                     Some(layout) => {
@@ -189,6 +265,7 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                     }
                     None => {
                         if STARTED.lock().unwrap().insert(key) {
+                            let gen = state.gen.clone();
                             let control = Arc::clone(
                                 state
                                     .control
@@ -201,7 +278,7 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                             let qhandle = qhandle.clone();
                             let conn = conn.clone();
                             thread::spawn(move || {
-                                let layout = layout(usable_width, usable_height, view_count);
+                                let layout = gen.layout(container, view_count);
                                 CACHE.lock().unwrap().insert(key, layout);
 
                                 // River will send a new layout demand
