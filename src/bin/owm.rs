@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use once_cell::sync::Lazy;
-use owm::{layout, Window};
+use owm::{layout, Rect};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -164,7 +164,7 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 serial,
             } => {
                 type Key = (usize, usize, usize);
-                static CACHE: Lazy<Mutex<HashMap<Key, Vec<Window>>>> =
+                static CACHE: Lazy<Mutex<HashMap<Key, Vec<Rect>>>> =
                     Lazy::new(|| Mutex::new(HashMap::new()));
                 static STARTED: Lazy<Mutex<HashSet<Key>>> =
                     Lazy::new(|| Mutex::new(HashSet::new()));
@@ -176,12 +176,12 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
 
                 match CACHE.lock().unwrap().get(&key) {
                     Some(layout) => {
-                        for window in layout {
+                        for rect in layout {
                             proxy.push_view_dimensions(
-                                window.pos.x as i32,
-                                window.pos.y as i32,
-                                window.size.width as u32,
-                                window.size.height as u32,
+                                rect.pos.x as i32,
+                                rect.pos.y as i32,
+                                rect.size.width as u32,
+                                rect.size.height as u32,
                                 serial,
                             );
                         }

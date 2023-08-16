@@ -1,23 +1,23 @@
 use proptest::prelude::{prop::collection::vec, *};
 
-use crate::{types::RangeExclusive, Size, Window};
+use crate::{types::RangeExclusive, Rect, Size};
 
 #[derive(Debug, Clone)]
-pub struct ContainedWindows {
+pub struct ContainedRects {
     pub container: Size,
-    pub windows: Vec<Window>,
+    pub rects: Vec<Rect>,
 }
 
-pub struct NumWindowsRange(pub usize, pub usize);
+pub struct NumRectsRange(pub usize, pub usize);
 
-impl Default for NumWindowsRange {
+impl Default for NumRectsRange {
     fn default() -> Self {
         Self(0, 16)
     }
 }
 
-impl Arbitrary for ContainedWindows {
-    type Parameters = NumWindowsRange;
+impl Arbitrary for ContainedRects {
+    type Parameters = NumRectsRange;
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(range: Self::Parameters) -> Self::Strategy {
@@ -26,11 +26,11 @@ impl Arbitrary for ContainedWindows {
                 vec(
                     (0..container.width, 0..container.height).prop_flat_map(move |(x, y)| {
                         (1..=container.width - x, 1..=container.height - y)
-                            .prop_map(move |(width, height)| Window::new(x, y, width, height))
+                            .prop_map(move |(width, height)| Rect::new(x, y, width, height))
                     }),
                     count,
                 )
-                .prop_map(move |windows| ContainedWindows { container, windows })
+                .prop_map(move |rects| ContainedRects { container, rects })
             })
             .boxed()
     }

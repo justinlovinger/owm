@@ -1,16 +1,16 @@
 use itertools::Itertools;
 use ndarray::prelude::*;
 
-use crate::types::{RangeExclusive, Size, Window};
+use crate::types::{RangeExclusive, Rect, Size};
 
-pub fn trim_off_screen(container: Size, mut windows: ArrayViewMut1<Window>) {
-    for window in windows.iter_mut() {
-        window.size.width = window.size.width.min(container.width - window.pos.x);
-        window.size.height = window.size.height.min(container.height - window.pos.y);
+pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
+    for rect in rects.iter_mut() {
+        rect.size.width = rect.size.width.min(container.width - rect.pos.x);
+        rect.size.height = rect.size.height.min(container.height - rect.pos.y);
     }
 }
 
-pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<Window>) {
+pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rect>) {
     debug_assert!(max_size.width <= container.width);
     debug_assert!(max_size.height <= container.height);
 
@@ -21,13 +21,13 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
         (x, y)
     };
 
-    let mut freedoms = windows
+    let mut freedoms = rects
         .iter()
-        .map(|window| Freedoms {
-            left: window.left(),
-            right: container.width.saturating_sub(window.right()),
-            top: window.top(),
-            bottom: container.height.saturating_sub(window.bottom()),
+        .map(|rect| Freedoms {
+            left: rect.left(),
+            right: container.width.saturating_sub(rect.right()),
+            top: rect.top(),
+            bottom: container.height.saturating_sub(rect.bottom()),
         })
         .collect_vec();
     loop {
@@ -37,129 +37,127 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
         // they only need to not underestimate,
         // as long as they are accurate
         // when freedom is zero.
-        let x_rays = windows
+        let x_rays = rects
             .iter()
             .zip(freedoms.iter())
-            .map(|(window, freedoms)| {
-                let y_range = window.y_range_exclusive();
-                let max_free = max_size.width.saturating_sub(window.size.width);
+            .map(|(rect, freedoms)| {
+                let y_range = rect.y_range_exclusive();
+                let max_free = max_size.width.saturating_sub(rect.size.width);
                 let left = if freedoms.left == 0 {
-                    window.left()
+                    rect.left()
                 } else {
-                    windows
+                    rects
                         .iter()
                         .filter(|other| {
-                            other.right() < window.left()
+                            other.right() < rect.left()
                                 && y_range.intersects(other.y_range_exclusive())
                         })
                         .map(|other| other.right())
                         .max()
                         .unwrap_or(0)
-                        .max(window.left().saturating_sub(max_free))
+                        .max(rect.left().saturating_sub(max_free))
                 };
                 let right = if freedoms.right == 0 {
-                    window.right()
+                    rect.right()
                 } else {
-                    windows
+                    rects
                         .iter()
                         .filter(|other| {
-                            window.right() < other.left()
+                            rect.right() < other.left()
                                 && y_range.intersects(other.y_range_exclusive())
                         })
                         .map(|other| other.left())
                         .min()
                         .unwrap_or(container.width)
-                        .min(window.right() + max_free)
+                        .min(rect.right() + max_free)
                 };
                 RangeExclusive(left, right)
             })
             .collect_vec();
-        let y_rays = windows
+        let y_rays = rects
             .iter()
             .zip(freedoms.iter())
-            .map(|(window, freedoms)| {
-                let x_range = window.x_range_exclusive();
-                let max_free = max_size.height.saturating_sub(window.size.height);
+            .map(|(rect, freedoms)| {
+                let x_range = rect.x_range_exclusive();
+                let max_free = max_size.height.saturating_sub(rect.size.height);
                 let top = if freedoms.top == 0 {
-                    window.top()
+                    rect.top()
                 } else {
-                    windows
+                    rects
                         .iter()
                         .filter(|other| {
-                            other.bottom() < window.top()
+                            other.bottom() < rect.top()
                                 && x_range.intersects(other.x_range_exclusive())
                         })
                         .map(|other| other.bottom())
                         .max()
                         .unwrap_or(0)
-                        .max(window.top().saturating_sub(max_free))
+                        .max(rect.top().saturating_sub(max_free))
                 };
                 let bottom = if freedoms.bottom == 0 {
-                    window.bottom()
+                    rect.bottom()
                 } else {
-                    windows
+                    rects
                         .iter()
                         .filter(|other| {
-                            window.bottom() < other.top()
+                            rect.bottom() < other.top()
                                 && x_range.intersects(other.x_range_exclusive())
                         })
                         .map(|other| other.top())
                         .min()
                         .unwrap_or(container.height)
-                        .min(window.bottom() + max_free)
+                        .min(rect.bottom() + max_free)
                 };
                 RangeExclusive(top, bottom)
             })
             .collect_vec();
 
-        for (window, freedoms) in windows.iter().zip(freedoms.iter_mut()) {
+        for (rect, freedoms) in rects.iter().zip(freedoms.iter_mut()) {
             let (left, right) = flip_flop(
-                max_size.width.saturating_sub(window.size.width),
-                window.left(),
-                container.width.saturating_sub(window.right()),
+                max_size.width.saturating_sub(rect.size.width),
+                rect.left(),
+                container.width.saturating_sub(rect.right()),
             );
             freedoms.left = left;
             freedoms.right = right;
             let (top, bottom) = flip_flop(
-                max_size.height.saturating_sub(window.size.height),
-                window.top(),
-                container.height.saturating_sub(window.bottom()),
+                max_size.height.saturating_sub(rect.size.height),
+                rect.top(),
+                container.height.saturating_sub(rect.bottom()),
             );
             freedoms.top = top;
             freedoms.bottom = bottom;
         }
-        for (
-            ((i, window), (x_ray, y_ray)),
-            ((other_i, other_window), (other_x_ray, other_y_ray)),
-        ) in windows
-            .iter()
-            .enumerate()
-            .zip(x_rays.iter().zip(y_rays.iter()))
-            .tuple_combinations()
+        for (((i, rect), (x_ray, y_ray)), ((other_i, other_rect), (other_x_ray, other_y_ray))) in
+            rects
+                .iter()
+                .enumerate()
+                .zip(x_rays.iter().zip(y_rays.iter()))
+                .tuple_combinations()
         {
-            let x_range = window.x_range_exclusive();
-            let other_x_range = other_window.x_range_exclusive();
-            let y_range = window.y_range_exclusive();
-            let other_y_range = other_window.y_range_exclusive();
+            let x_range = rect.x_range_exclusive();
+            let other_x_range = other_rect.x_range_exclusive();
+            let y_range = rect.y_range_exclusive();
+            let other_y_range = other_rect.y_range_exclusive();
 
             if y_ray.intersects(*other_y_ray) {
                 let y_intersects = y_range.intersects(other_y_range);
                 if y_intersects {
-                    if other_x_range.contains(window.left()) {
+                    if other_x_range.contains(rect.left()) {
                         freedoms.get_mut(i).unwrap().left = 0;
                     }
-                    if x_range.contains(other_window.right()) {
+                    if x_range.contains(other_rect.right()) {
                         freedoms.get_mut(other_i).unwrap().right = 0;
                     }
-                    if other_x_range.contains(window.right()) {
+                    if other_x_range.contains(rect.right()) {
                         freedoms.get_mut(i).unwrap().right = 0;
                     }
-                    if x_range.contains(other_window.left()) {
+                    if x_range.contains(other_rect.left()) {
                         freedoms.get_mut(other_i).unwrap().left = 0;
                     }
                 }
-                if other_window.right() <= window.left() {
-                    let dist = window.left() - other_window.right();
+                if other_rect.right() <= rect.left() {
+                    let dist = rect.left() - other_rect.right();
                     if dist > 0 || y_intersects {
                         let (left, right) =
                             flip_flop(dist, freedoms[i].left, freedoms[other_i].right);
@@ -167,8 +165,8 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
                         freedoms.get_mut(other_i).unwrap().right = right;
                     }
                 }
-                if window.right() <= other_window.left() {
-                    let dist = other_window.left() - window.right();
+                if rect.right() <= other_rect.left() {
+                    let dist = other_rect.left() - rect.right();
                     if dist > 0 || y_intersects {
                         let (right, left) =
                             flip_flop(dist, freedoms[i].right, freedoms[other_i].left);
@@ -181,21 +179,21 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
             if x_ray.intersects(*other_x_ray) {
                 let x_intersects = x_range.intersects(other_x_range);
                 if x_intersects {
-                    if other_y_range.contains(window.top()) {
+                    if other_y_range.contains(rect.top()) {
                         freedoms.get_mut(i).unwrap().top = 0;
                     }
-                    if y_range.contains(other_window.bottom()) {
+                    if y_range.contains(other_rect.bottom()) {
                         freedoms.get_mut(other_i).unwrap().bottom = 0;
                     }
-                    if other_y_range.contains(window.bottom()) {
+                    if other_y_range.contains(rect.bottom()) {
                         freedoms.get_mut(i).unwrap().bottom = 0;
                     }
-                    if y_range.contains(other_window.top()) {
+                    if y_range.contains(other_rect.top()) {
                         freedoms.get_mut(other_i).unwrap().top = 0;
                     }
                 }
-                if other_window.bottom() <= window.top() {
-                    let dist = window.top() - other_window.bottom();
+                if other_rect.bottom() <= rect.top() {
+                    let dist = rect.top() - other_rect.bottom();
                     if dist > 0 || x_intersects {
                         let (top, bottom) =
                             flip_flop(dist, freedoms[i].top, freedoms[other_i].bottom);
@@ -203,8 +201,8 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
                         freedoms.get_mut(other_i).unwrap().bottom = bottom;
                     }
                 }
-                if window.bottom() <= other_window.top() {
-                    let dist = other_window.top() - window.bottom();
+                if rect.bottom() <= other_rect.top() {
+                    let dist = other_rect.top() - rect.bottom();
                     if dist > 0 || x_intersects {
                         let (bottom, top) =
                             flip_flop(dist, freedoms[i].bottom, freedoms[other_i].top);
@@ -222,11 +220,11 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
             .min();
         match largest_safe_step {
             Some(largest_safe_step) => {
-                for (window, freedoms) in windows.iter_mut().zip(freedoms.iter()) {
-                    window.expand_left(freedoms.left.min(largest_safe_step));
-                    window.expand_right(freedoms.right.min(largest_safe_step));
-                    window.expand_top(freedoms.top.min(largest_safe_step));
-                    window.expand_bottom(freedoms.bottom.min(largest_safe_step));
+                for (rect, freedoms) in rects.iter_mut().zip(freedoms.iter()) {
+                    rect.expand_left(freedoms.left.min(largest_safe_step));
+                    rect.expand_right(freedoms.right.min(largest_safe_step));
+                    rect.expand_top(freedoms.top.min(largest_safe_step));
+                    rect.expand_bottom(freedoms.bottom.min(largest_safe_step));
                 }
             }
             None => break,
@@ -234,11 +232,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut windows: ArrayViewMut1<W
     }
 }
 
-pub fn overlap_borders(
-    border_thickness: usize,
-    container: Size,
-    mut windows: ArrayViewMut1<Window>,
-) {
+pub fn overlap_borders(border_thickness: usize, container: Size, mut rects: ArrayViewMut1<Rect>) {
     let border_thickness_half_ceil = div_ceil(border_thickness, 2);
     let border_thickness_half = border_thickness / 2;
 
@@ -263,76 +257,76 @@ pub fn overlap_borders(
         }
     };
 
-    let borders = windows
+    let borders = rects
         .iter()
         .enumerate()
-        .map(|(i, window)| {
-            let x_range = window.x_range_exclusive();
-            let y_range = window.y_range_exclusive();
+        .map(|(i, rect)| {
+            let x_range = rect.x_range_exclusive();
+            let y_range = rect.y_range_exclusive();
             Sides {
                 left: {
-                    windows
+                    rects
                         .iter()
                         .enumerate()
-                        .filter_map(|(other_i, other_window)| {
+                        .filter_map(|(other_i, other_rect)| {
                             filter_map(
                                 i,
                                 other_i,
                                 y_range,
-                                other_window.y_range_exclusive(),
-                                window.left(),
-                                other_window.right(),
+                                other_rect.y_range_exclusive(),
+                                rect.left(),
+                                other_rect.right(),
                             )
                         })
                         .min()
                         .and_then(filter_out_of_range)
                 },
                 right: {
-                    windows
+                    rects
                         .iter()
                         .enumerate()
-                        .filter_map(|(other_i, other_window)| {
+                        .filter_map(|(other_i, other_rect)| {
                             filter_map(
                                 i,
                                 other_i,
                                 y_range,
-                                other_window.y_range_exclusive(),
-                                other_window.left(),
-                                window.right(),
+                                other_rect.y_range_exclusive(),
+                                other_rect.left(),
+                                rect.right(),
                             )
                         })
                         .min()
                         .and_then(filter_out_of_range)
                 },
                 top: {
-                    windows
+                    rects
                         .iter()
                         .enumerate()
-                        .filter_map(|(other_i, other_window)| {
+                        .filter_map(|(other_i, other_rect)| {
                             filter_map(
                                 i,
                                 other_i,
                                 x_range,
-                                other_window.x_range_exclusive(),
-                                window.top(),
-                                other_window.bottom(),
+                                other_rect.x_range_exclusive(),
+                                rect.top(),
+                                other_rect.bottom(),
                             )
                         })
                         .min()
                         .and_then(filter_out_of_range)
                 },
                 bottom: {
-                    windows
+                    rects
                         .iter()
                         .enumerate()
-                        .filter_map(|(other_i, other_window)| {
+                        .filter_map(|(other_i, other_rect)| {
                             filter_map(
                                 i,
                                 other_i,
                                 x_range,
-                                other_window.x_range_exclusive(),
-                                other_window.top(),
-                                window.bottom(),
+                                other_rect.x_range_exclusive(),
+                                other_rect.top(),
+                                rect.bottom(),
                             )
                         })
                         .min()
@@ -342,56 +336,56 @@ pub fn overlap_borders(
         })
         .collect_vec();
 
-    for ((i, window), borders) in windows.iter_mut().enumerate().zip(borders.iter()) {
+    for ((i, rect), borders) in rects.iter_mut().enumerate().zip(borders.iter()) {
         match borders.left {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_left(border_thickness_half_ceil);
+                    rect.expand_left(border_thickness_half_ceil);
                 } else {
-                    window.expand_left(border_thickness_half);
+                    rect.expand_left(border_thickness_half);
                 }
             }
             None => {
-                window.expand_left(border_thickness.min(window.left()));
+                rect.expand_left(border_thickness.min(rect.left()));
             }
         }
         match borders.right {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_right(border_thickness_half_ceil);
+                    rect.expand_right(border_thickness_half_ceil);
                 } else {
-                    window.expand_right(border_thickness_half);
+                    rect.expand_right(border_thickness_half);
                 }
             }
             None => {
-                window.expand_right(
-                    border_thickness.min(container.width.saturating_sub(window.right())),
+                rect.expand_right(
+                    border_thickness.min(container.width.saturating_sub(rect.right())),
                 );
             }
         }
         match borders.top {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_top(border_thickness_half_ceil);
+                    rect.expand_top(border_thickness_half_ceil);
                 } else {
-                    window.expand_top(border_thickness_half);
+                    rect.expand_top(border_thickness_half);
                 }
             }
             None => {
-                window.expand_top(border_thickness.min(window.top()));
+                rect.expand_top(border_thickness.min(rect.top()));
             }
         }
         match borders.bottom {
             Some(other_i) => {
                 if i < other_i {
-                    window.expand_bottom(border_thickness_half_ceil);
+                    rect.expand_bottom(border_thickness_half_ceil);
                 } else {
-                    window.expand_bottom(border_thickness_half);
+                    rect.expand_bottom(border_thickness_half);
                 }
             }
             None => {
-                window.expand_bottom(
-                    border_thickness.min(container.height.saturating_sub(window.bottom())),
+                rect.expand_bottom(
+                    border_thickness.min(container.height.saturating_sub(rect.bottom())),
                 );
             }
         }
@@ -428,33 +422,33 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
-        testing::{ContainedWindows, NumWindowsRange},
+        testing::{ContainedRects, NumRectsRange},
         types::{covered_area, obscured_area},
     };
 
     use super::*;
 
     #[test]
-    fn remove_gaps_expands_windows_at_the_same_rate() {
+    fn remove_gaps_expands_at_same_rate() {
         let container = Size::new(10, 10);
-        let mut windows = arr1(&[
-            Window::new(2, 2, 6, 1),
-            Window::new(2, 7, 1, 1),
-            Window::new(7, 7, 1, 1),
+        let mut rects = arr1(&[
+            Rect::new(2, 2, 6, 1),
+            Rect::new(2, 7, 1, 1),
+            Rect::new(7, 7, 1, 1),
         ]);
-        remove_gaps(container, container, windows.view_mut());
+        remove_gaps(container, container, rects.view_mut());
         assert_eq!(
-            windows,
+            rects,
             arr1(&[
-                Window::new(0, 0, 10, 5),
-                Window::new(0, 5, 5, 5),
-                Window::new(5, 5, 5, 5),
+                Rect::new(0, 0, 10, 5),
+                Rect::new(0, 5, 5, 5),
+                Rect::new(5, 5, 5, 5),
             ]),
         )
     }
 
-    #[ignore = "fails when corners touch or windows overlap"]
-    // Four or more windows can be in an arrangement
+    #[ignore = "fails when corners touch or rectangles overlap"]
+    // Four or more rectangles can be in an arrangement
     // requiring overlapping
     // to remove gaps,
     //
@@ -464,47 +458,47 @@ mod tests {
     // dcc
     // ```
     #[proptest]
-    fn remove_gaps_with_no_max_size_and_1_to_3_windows_covers_container(
-        #[strategy(ContainedWindows::arbitrary_with(NumWindowsRange(1, 3)))] args: ContainedWindows,
+    fn remove_gaps_with_no_max_size_and_1_to_3_rects_covers_container(
+        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(1, 3)))] args: ContainedRects,
     ) {
-        let mut windows = Array::from(args.windows);
-        remove_gaps(args.container, args.container, windows.view_mut());
+        let mut rects = Array::from(args.rects);
+        remove_gaps(args.container, args.container, rects.view_mut());
         prop_assert_eq!(
-            covered_area(windows.as_slice().unwrap()),
+            covered_area(rects.as_slice().unwrap()),
             args.container.area()
         )
     }
 
     #[ignore = "fails when corners touch"]
-    // See above comment about four or more windows.
+    // See above comment about four or more rects.
     #[proptest(max_global_rejects = 65536)]
-    fn remove_gaps_with_1_to_3_windows_no_max_size_and_no_overlap_tiles_container(
-        #[strategy(ContainedWindows::arbitrary_with(NumWindowsRange(1, 3)))] args: ContainedWindows,
+    fn remove_gaps_with_1_to_3_rects_no_max_size_and_no_overlap_tiles_container(
+        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(1, 3)))] args: ContainedRects,
     ) {
-        prop_assume!(obscured_area(&args.windows) == 0);
-        let mut windows = Array::from(args.windows);
-        remove_gaps(args.container, args.container, windows.view_mut());
+        prop_assume!(obscured_area(&args.rects) == 0);
+        let mut rects = Array::from(args.rects);
+        remove_gaps(args.container, args.container, rects.view_mut());
         prop_assert_eq!(
-            windows.into_iter().map(|x| x.area()).sum::<usize>(),
+            rects.into_iter().map(|x| x.area()).sum::<usize>(),
             args.container.area()
         )
     }
 
     #[proptest(max_global_rejects = 65536)]
-    fn remove_gaps_does_not_make_windows_overlap_if_they_did_not_already(args: RemoveGapsArgs) {
-        prop_assume!(obscured_area(&args.windows) == 0);
-        let mut windows = Array::from(args.windows);
-        remove_gaps(args.max_size, args.container, windows.view_mut());
-        prop_assert_eq!(obscured_area(windows.as_slice().unwrap()), 0)
+    fn remove_gaps_does_not_make_rects_overlap_if_they_did_not_already(args: RemoveGapsArgs) {
+        prop_assume!(obscured_area(&args.rects) == 0);
+        let mut rects = Array::from(args.rects);
+        remove_gaps(args.max_size, args.container, rects.view_mut());
+        prop_assert_eq!(obscured_area(rects.as_slice().unwrap()), 0)
     }
 
     #[proptest]
     fn remove_gaps_respects_max_size(args: RemoveGapsArgs) {
-        let mut windows = Array::from(args.windows);
-        remove_gaps(args.max_size, args.container, windows.view_mut());
-        for window in windows {
-            prop_assert!(window.size.width <= args.max_size.width);
-            prop_assert!(window.size.height <= args.max_size.height);
+        let mut rects = Array::from(args.rects);
+        remove_gaps(args.max_size, args.container, rects.view_mut());
+        for rect in rects {
+            prop_assert!(rect.size.width <= args.max_size.width);
+            prop_assert!(rect.size.height <= args.max_size.height);
         }
     }
 
@@ -513,46 +507,46 @@ mod tests {
         #[strategy(1_usize..=32)] border_thickness: usize,
         container: Size,
     ) {
-        let init_windows = [Window::new(0, 0, container.width, container.height)];
-        let mut windows = arr1(&init_windows);
-        overlap_borders(border_thickness, container, windows.view_mut());
-        assert_eq!(windows.into_raw_vec(), init_windows)
+        let init = [Rect::new(0, 0, container.width, container.height)];
+        let mut rects = arr1(&init);
+        overlap_borders(border_thickness, container, rects.view_mut());
+        assert_eq!(rects.into_raw_vec(), init)
     }
 
     #[test]
-    fn overlap_borders_expands_windows_evenly() {
+    fn overlap_borders_expands_evenly() {
         let container = Size::new(10, 10);
-        let mut windows = arr1(&[
-            Window::new(0, 0, 10, 5),
-            Window::new(0, 5, 5, 5),
-            Window::new(5, 5, 5, 5),
+        let mut rects = arr1(&[
+            Rect::new(0, 0, 10, 5),
+            Rect::new(0, 5, 5, 5),
+            Rect::new(5, 5, 5, 5),
         ]);
-        overlap_borders(2, container, windows.view_mut());
+        overlap_borders(2, container, rects.view_mut());
         assert_eq!(
-            windows,
+            rects,
             arr1(&[
-                Window::new(0, 0, 10, 6),
-                Window::new(0, 4, 6, 6),
-                Window::new(4, 4, 6, 6),
+                Rect::new(0, 0, 10, 6),
+                Rect::new(0, 4, 6, 6),
+                Rect::new(4, 4, 6, 6),
             ]),
         )
     }
 
     #[test]
-    fn overlap_borders_breaks_ties_in_favor_of_higher_windows() {
+    fn overlap_borders_breaks_ties_in_favor_of_first() {
         let container = Size::new(10, 10);
-        let mut windows = arr1(&[
-            Window::new(0, 0, 10, 5),
-            Window::new(0, 5, 5, 5),
-            Window::new(5, 5, 5, 5),
+        let mut rects = arr1(&[
+            Rect::new(0, 0, 10, 5),
+            Rect::new(0, 5, 5, 5),
+            Rect::new(5, 5, 5, 5),
         ]);
-        overlap_borders(1, container, windows.view_mut());
+        overlap_borders(1, container, rects.view_mut());
         assert_eq!(
-            windows,
+            rects,
             arr1(&[
-                Window::new(0, 0, 10, 6),
-                Window::new(0, 5, 6, 5),
-                Window::new(5, 5, 5, 5),
+                Rect::new(0, 0, 10, 6),
+                Rect::new(0, 5, 6, 5),
+                Rect::new(5, 5, 5, 5),
             ]),
         )
     }
@@ -574,21 +568,21 @@ mod tests {
     struct RemoveGapsArgs {
         max_size: Size,
         container: Size,
-        windows: Vec<Window>,
+        rects: Vec<Rect>,
     }
 
     impl Arbitrary for RemoveGapsArgs {
-        type Parameters = NumWindowsRange;
+        type Parameters = NumRectsRange;
         type Strategy = BoxedStrategy<Self>;
 
         fn arbitrary_with(range: Self::Parameters) -> Self::Strategy {
-            ContainedWindows::arbitrary_with(range)
+            ContainedRects::arbitrary_with(range)
                 .prop_flat_map(|x| {
                     (
                         (
-                            x.windows.iter().map(|x| x.size.width).max().unwrap_or(0)
+                            x.rects.iter().map(|x| x.size.width).max().unwrap_or(0)
                                 ..=x.container.width,
-                            x.windows.iter().map(|x| x.size.height).max().unwrap_or(0)
+                            x.rects.iter().map(|x| x.size.height).max().unwrap_or(0)
                                 ..=x.container.height,
                         )
                             .prop_map(|(width, height)| Size::new(width, height)),
@@ -598,7 +592,7 @@ mod tests {
                 .prop_map(|(max_size, x)| Self {
                     max_size,
                     container: x.container,
-                    windows: x.windows,
+                    rects: x.rects,
                 })
                 .boxed()
         }

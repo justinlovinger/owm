@@ -4,15 +4,15 @@ use ndarray::prelude::*;
 
 use crate::{
     binary::ToFracLE,
-    post_processing::{remove_gaps, trim_off_screen},
-    types::{Size, Window},
+    post_processing::{remove_gaps, trim_outside},
+    types::{Rect, Size},
 };
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
     max_size: Size,
     container: Size,
-    num_windows: usize,
+    count: usize,
     x_decoder: ToFracLE<f64>,
     y_decoder: ToFracLE<f64>,
     width_decoder: ToFracLE<f64>,
@@ -24,7 +24,7 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub fn new(min_size: Size, max_size: Size, container: Size, num_windows: usize) -> Self {
+    pub fn new(min_size: Size, max_size: Size, container: Size, count: usize) -> Self {
         debug_assert!(min_size.width <= max_size.width);
         debug_assert!(min_size.height <= max_size.height);
         debug_assert!(max_size.width <= container.width);
@@ -41,7 +41,7 @@ impl Decoder {
         Self {
             max_size,
             container,
-            num_windows,
+            count,
             x_decoder: ToFracLE::new(0.0..=(x_max as f64), bits_per_x),
             y_decoder: ToFracLE::new(0.0..=(y_max as f64), bits_per_y),
             width_decoder: ToFracLE::new(
@@ -61,30 +61,30 @@ impl Decoder {
     }
 
     pub fn bits(&self) -> usize {
-        self.bits_per_window() * self.num_windows
+        self.bits_per_rect() * self.count
     }
 
-    fn bits_per_window(&self) -> usize {
+    fn bits_per_rect(&self) -> usize {
         self.height_bits_range.end
     }
 
-    pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Window> {
+    pub fn decode1(&self, bits: ArrayView1<bool>) -> Array1<Rect> {
         Array::from_vec(
             self.decode2(bits.into_shape((1, bits.len())).unwrap())
                 .into_raw_vec(),
         )
     }
 
-    pub fn decode2(&self, bits: ArrayView2<bool>) -> Array2<Window> {
-        let mut windows = bits
+    pub fn decode2(&self, bits: ArrayView2<bool>) -> Array2<Rect> {
+        let mut rects = bits
             .into_shape((
                 bits.nrows(),
-                bits.ncols() / self.bits_per_window(),
-                self.bits_per_window(),
+                bits.ncols() / self.bits_per_rect(),
+                self.bits_per_rect(),
             ))
             .unwrap()
             .map_axis(Axis(2), |xs| {
-                Window::new(
+                Rect::new(
                     self.x_decoder
                         .decode(xs.slice(s![self.x_bits_range.clone()]).into_iter().copied())
                         as usize,
@@ -103,11 +103,11 @@ impl Decoder {
                     ) as usize,
                 )
             });
-        for mut windows in windows.axis_iter_mut(Axis(0)) {
-            trim_off_screen(self.container, windows.view_mut());
-            remove_gaps(self.max_size, self.container, windows.view_mut());
+        for mut rects in rects.axis_iter_mut(Axis(0)) {
+            trim_outside(self.container, rects.view_mut());
+            remove_gaps(self.max_size, self.container, rects.view_mut());
         }
-        windows
+        rects
     }
 }
 

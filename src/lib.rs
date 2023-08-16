@@ -15,9 +15,9 @@ use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
 
 use crate::objective::Problem;
-pub use crate::types::{Pos, Size, Window};
+pub use crate::types::{Pos, Rect, Size};
 
-pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
+pub fn layout(width: usize, height: usize, count: usize) -> Vec<Rect> {
     let container = Size { width, height };
     let max_size = Size::new(1920.min(container.width), container.height);
     let decoder = Decoder::new(
@@ -27,7 +27,7 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
         count,
     );
     let problem = Problem::new(container, count);
-    let mut windows = decoder.decode1(
+    let mut rects = decoder.decode1(
         UntilConvergedConfig {
             threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
         }
@@ -41,15 +41,15 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
             .start_using(
                 decoder.bits(),
                 |points| {
-                    decoder.decode2(points).map_axis(Axis(1), |windows| {
-                        problem.evaluate(windows.as_slice().unwrap())
-                    })
+                    decoder
+                        .decode2(points)
+                        .map_axis(Axis(1), |rects| problem.evaluate(rects.as_slice().unwrap()))
                 },
                 &mut SplitMix64::seed_from_u64(0),
             ),
         )
         .view(),
     );
-    overlap_borders(1, container, windows.view_mut());
-    windows.into_raw_vec()
+    overlap_borders(1, container, rects.view_mut());
+    rects.into_raw_vec()
 }

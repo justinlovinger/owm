@@ -3,7 +3,7 @@ use std::cmp::PartialOrd;
 use itertools::Itertools;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Window {
+pub struct Rect {
     pub pos: Pos,
     pub size: Size,
 }
@@ -20,7 +20,7 @@ pub struct Size {
     pub height: usize,
 }
 
-impl Window {
+impl Rect {
     pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
         Self {
             pos: Pos { x, y },
@@ -114,14 +114,14 @@ impl Window {
         self.size.area()
     }
 
-    pub fn overlap(&self, other: &Window) -> Option<Window> {
+    pub fn overlap(&self, other: &Rect) -> Option<Rect> {
         let left = self.left().max(other.left());
         let right = self.right().min(other.right());
         let top = self.top().max(other.top());
         let bottom = self.bottom().min(other.bottom());
 
         if left < right && top < bottom {
-            Some(Window {
+            Some(Rect {
                 pos: Pos { x: left, y: top },
                 size: Size {
                     width: right - left,
@@ -176,28 +176,28 @@ impl From<Size> for Pos {
 // <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
 // This could be optimized using segment trees.
 /// Return the total area of a union of rectangles.
-pub fn covered_area(windows: &[Window]) -> usize {
-    let mut xs = windows
+pub fn covered_area(rects: &[Rect]) -> usize {
+    let mut xs = rects
         .iter()
-        .flat_map(|window| [window.left(), window.right()])
+        .flat_map(|rect| [rect.left(), rect.right()])
         .collect_vec();
     xs.sort();
     xs.dedup();
 
-    let mut windows = windows.to_vec();
-    windows.sort_by_key(|window| window.top());
+    let mut rects = rects.to_vec();
+    rects.sort_by_key(|rect| rect.top());
 
     xs.into_iter()
         .tuple_windows()
         .map(|(left, right)| {
             let width = right - left;
             let mut last_y2 = usize::MIN;
-            windows
+            rects
                 .iter()
-                .filter(|window| window.left() <= left && right <= window.right())
-                .map(|window| {
-                    let ret = width * window.bottom().saturating_sub(last_y2.max(window.top()));
-                    last_y2 = window.bottom().max(last_y2);
+                .filter(|rect| rect.left() <= left && right <= rect.right())
+                .map(|rect| {
+                    let ret = width * rect.bottom().saturating_sub(last_y2.max(rect.top()));
+                    last_y2 = rect.bottom().max(last_y2);
                     ret
                 })
                 .sum::<usize>()
@@ -209,19 +209,19 @@ pub fn covered_area(windows: &[Window]) -> usize {
 /// If `n` rectangles are overlapped by an `n + 1`th rectangle,
 /// the overlapped area will be counted `n` times,
 /// but not `n + 1` times.
-pub fn obscured_area(windows: &[Window]) -> usize {
-    if windows.len() < 2 {
+pub fn obscured_area(rects: &[Rect]) -> usize {
+    if rects.len() < 2 {
         0
     } else {
-        let overlaps = windows
+        let overlaps = rects
             .iter()
             .enumerate()
-            .map(|(i, window)| {
-                windows
+            .map(|(i, rect)| {
+                rects
                     .iter()
                     .enumerate()
                     .filter(|(other_i, _)| i != *other_i)
-                    .filter_map(|(_, other)| window.overlap(other))
+                    .filter_map(|(_, other)| rect.overlap(other))
                     .collect_vec()
             })
             .collect_vec();
