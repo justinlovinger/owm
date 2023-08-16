@@ -353,6 +353,8 @@ dependencies = [
  "once_cell",
  "optimal",
  "proptest",
+ "rand",
+ "rand_xoshiro",
  "test-strategy",
  "wayland-client",
  "wayland-scanner",

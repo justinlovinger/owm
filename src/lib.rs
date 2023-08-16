@@ -11,6 +11,8 @@ use encoding::Decoder;
 use ndarray::Axis;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 use post_processing::overlap_borders;
+use rand::prelude::*;
+use rand_xoshiro::SplitMix64;
 
 use crate::objective::Problem;
 pub use crate::types::{Pos, Size, Window};
@@ -36,11 +38,15 @@ pub fn layout(width: usize, height: usize, count: usize) -> Vec<Window> {
                 mutation_chance: MutationChance::new(0.0).unwrap(),
                 mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
             }
-            .start(decoder.bits(), |points| {
-                decoder.decode2(points).map_axis(Axis(1), |windows| {
-                    problem.evaluate(windows.as_slice().unwrap())
-                })
-            }),
+            .start_using(
+                decoder.bits(),
+                |points| {
+                    decoder.decode2(points).map_axis(Axis(1), |windows| {
+                        problem.evaluate(windows.as_slice().unwrap())
+                    })
+                },
+                &mut SplitMix64::seed_from_u64(0),
+            ),
         )
         .view(),
     );
