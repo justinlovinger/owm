@@ -5,8 +5,8 @@ use crate::rect::{covered_area, obscured_area, Pos, Rect, Size};
 pub struct Problem {
     gaps: MinimizeGaps,
     overlapping: MinimizeOverlapping,
-    higher_larger_area: GiveHigherInStackLargerArea,
-    near_in_stack_close: PlaceNearInStackClose,
+    area_ratio: MaintainAreaRatio,
+    adjacent_close: PlaceAdjacentClose,
     reading_order: PlaceInReadingOrder,
     center_main: CenterMain,
 }
@@ -16,8 +16,8 @@ impl Problem {
         Self {
             gaps: MinimizeGaps::new(container),
             overlapping: MinimizeOverlapping::new(container, count),
-            higher_larger_area: GiveHigherInStackLargerArea::new(2.0, container, count),
-            near_in_stack_close: PlaceNearInStackClose::new(container, count),
+            area_ratio: MaintainAreaRatio::new(2.0, container, count),
+            adjacent_close: PlaceAdjacentClose::new(container, count),
             reading_order: PlaceInReadingOrder::new(count),
             center_main: CenterMain::new(container),
         }
@@ -26,8 +26,8 @@ impl Problem {
     pub fn evaluate(&self, rects: &[Rect]) -> f64 {
         3.0 * self.gaps.evaluate(rects)
             + 2.0 * self.overlapping.evaluate(rects)
-            + 1.5 * self.higher_larger_area.evaluate(rects)
-            + 0.5 * self.near_in_stack_close.evaluate(rects)
+            + 1.5 * self.area_ratio.evaluate(rects)
+            + 0.5 * self.adjacent_close.evaluate(rects)
             + 0.5 * self.reading_order.evaluate(rects)
             + 3.0 * self.center_main.evaluate(rects)
     }
@@ -76,12 +76,12 @@ impl MinimizeOverlapping {
     }
 }
 
-struct GiveHigherInStackLargerArea {
+struct MaintainAreaRatio {
     ratio: f64,
     worst_case: f64,
 }
 
-impl GiveHigherInStackLargerArea {
+impl MaintainAreaRatio {
     fn new(ratio: f64, container: Size, count: usize) -> Self {
         debug_assert!(ratio >= 1.0);
         Self {
@@ -114,11 +114,11 @@ impl GiveHigherInStackLargerArea {
     }
 }
 
-struct PlaceNearInStackClose {
+struct PlaceAdjacentClose {
     worst_case: f64,
 }
 
-impl PlaceNearInStackClose {
+impl PlaceAdjacentClose {
     fn new(container: Size, count: usize) -> Self {
         Self {
             worst_case: (count.saturating_sub(1) * (Pos::new(0, 0)).dist(container.into())) as f64,
@@ -311,17 +311,17 @@ mod tests {
     }
 
     #[proptest]
-    fn give_higher_in_stack_larger_area_returns_values_in_range_0_1(
+    fn maintain_area_ratio_returns_values_in_range_0_1(
         #[strategy((1.0..=100.0))] ratio: f64,
         x: ContainedRects,
     ) {
         prop_assert!((0.0..=1.0).contains(
-            &GiveHigherInStackLargerArea::new(ratio, x.container, x.rects.len()).evaluate(&x.rects)
+            &MaintainAreaRatio::new(ratio, x.container, x.rects.len()).evaluate(&x.rects)
         ))
     }
 
     #[test]
-    fn give_higher_in_stack_larger_area_returns_1_for_worst_case() {
+    fn maintain_area_ratio_returns_1_for_worst_case() {
         // Note,
         // what exactly counts as the worst case
         // is uncertain.
@@ -340,13 +340,13 @@ mod tests {
             Rect::new(0, 0, 10, 10),
         ];
         assert_eq!(
-            GiveHigherInStackLargerArea::new(2.0, container, rects.len()).evaluate(&rects),
+            MaintainAreaRatio::new(2.0, container, rects.len()).evaluate(&rects),
             1.0
         )
     }
 
     #[test]
-    fn give_higher_in_stack_larger_area_returns_0_for_best_case() {
+    fn maintain_area_ratio_returns_0_for_best_case() {
         let container = Size {
             width: 10,
             height: 10,
@@ -357,19 +357,19 @@ mod tests {
             Rect::new(0, 0, 5, 5),
         ];
         assert_eq!(
-            GiveHigherInStackLargerArea::new(2.0, container, rects.len()).evaluate(&rects),
+            MaintainAreaRatio::new(2.0, container, rects.len()).evaluate(&rects),
             0.0
         )
     }
 
     #[proptest]
-    fn place_near_in_stack_close_returns_values_in_range_0_1(x: ContainedRects) {
+    fn place_adjacent_close_returns_values_in_range_0_1(x: ContainedRects) {
         prop_assert!((0.0..=1.0)
-            .contains(&PlaceNearInStackClose::new(x.container, x.rects.len()).evaluate(&x.rects)))
+            .contains(&PlaceAdjacentClose::new(x.container, x.rects.len()).evaluate(&x.rects)))
     }
 
     #[test]
-    fn place_near_in_stack_close_returns_1_for_worst_case() {
+    fn place_adjacent_close_returns_1_for_worst_case() {
         // Worst case is rectangles with zero size alternating opposite corners.
         let container = Size {
             width: 10,
@@ -381,13 +381,13 @@ mod tests {
             Rect::new(0, 0, 0, 0),
         ];
         assert_eq!(
-            PlaceNearInStackClose::new(container, rects.len()).evaluate(&rects),
+            PlaceAdjacentClose::new(container, rects.len()).evaluate(&rects),
             1.0
         )
     }
 
     #[test]
-    fn place_near_in_stack_close_returns_0_for_best_case() {
+    fn place_adjacent_close_returns_0_for_best_case() {
         let container = Size {
             width: 10,
             height: 10,
@@ -398,7 +398,7 @@ mod tests {
             Rect::new(5, 5, 5, 5),
         ];
         assert_eq!(
-            PlaceNearInStackClose::new(container, rects.len()).evaluate(&rects),
+            PlaceAdjacentClose::new(container, rects.len()).evaluate(&rects),
             0.0
         )
     }
