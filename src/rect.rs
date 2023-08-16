@@ -28,6 +28,22 @@ impl Rect {
         }
     }
 
+    pub fn x(&self) -> usize {
+        self.pos.x
+    }
+
+    pub fn y(&self) -> usize {
+        self.pos.y
+    }
+
+    pub fn width(&self) -> usize {
+        self.size.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.size.height
+    }
+
     pub fn left(&self) -> usize {
         self.pos.x
     }

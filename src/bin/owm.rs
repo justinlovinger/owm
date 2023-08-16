@@ -178,10 +178,10 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                     Some(layout) => {
                         for rect in layout {
                             proxy.push_view_dimensions(
-                                rect.pos.x as i32,
-                                rect.pos.y as i32,
-                                rect.size.width as u32,
-                                rect.size.height as u32,
+                                rect.x() as i32,
+                                rect.y() as i32,
+                                rect.width() as u32,
+                                rect.height() as u32,
                                 serial,
                             );
                         }

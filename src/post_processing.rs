@@ -5,8 +5,8 @@ use crate::rect::{RangeExclusive, Rect, Size};
 
 pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
     for rect in rects.iter_mut() {
-        rect.size.width = rect.size.width.min(container.width - rect.pos.x);
-        rect.size.height = rect.size.height.min(container.height - rect.pos.y);
+        rect.size.width = rect.width().min(container.width - rect.x());
+        rect.size.height = rect.height().min(container.height - rect.y());
     }
 }
 
@@ -42,7 +42,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
             .zip(freedoms.iter())
             .map(|(rect, freedoms)| {
                 let y_range = rect.y_range_exclusive();
-                let max_free = max_size.width.saturating_sub(rect.size.width);
+                let max_free = max_size.width.saturating_sub(rect.width());
                 let left = if freedoms.left == 0 {
                     rect.left()
                 } else {
@@ -79,7 +79,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
             .zip(freedoms.iter())
             .map(|(rect, freedoms)| {
                 let x_range = rect.x_range_exclusive();
-                let max_free = max_size.height.saturating_sub(rect.size.height);
+                let max_free = max_size.height.saturating_sub(rect.height());
                 let top = if freedoms.top == 0 {
                     rect.top()
                 } else {
@@ -114,14 +114,14 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
 
         for (rect, freedoms) in rects.iter().zip(freedoms.iter_mut()) {
             let (left, right) = flip_flop(
-                max_size.width.saturating_sub(rect.size.width),
+                max_size.width.saturating_sub(rect.width()),
                 rect.left(),
                 container.width.saturating_sub(rect.right()),
             );
             freedoms.left = left;
             freedoms.right = right;
             let (top, bottom) = flip_flop(
-                max_size.height.saturating_sub(rect.size.height),
+                max_size.height.saturating_sub(rect.height()),
                 rect.top(),
                 container.height.saturating_sub(rect.bottom()),
             );
@@ -497,8 +497,8 @@ mod tests {
         let mut rects = Array::from(args.rects);
         remove_gaps(args.max_size, args.container, rects.view_mut());
         for rect in rects {
-            prop_assert!(rect.size.width <= args.max_size.width);
-            prop_assert!(rect.size.height <= args.max_size.height);
+            prop_assert!(rect.width() <= args.max_size.width);
+            prop_assert!(rect.height() <= args.max_size.height);
         }
     }
 
@@ -580,9 +580,9 @@ mod tests {
                 .prop_flat_map(|x| {
                     (
                         (
-                            x.rects.iter().map(|x| x.size.width).max().unwrap_or(0)
+                            x.rects.iter().map(|x| x.width()).max().unwrap_or(0)
                                 ..=x.container.width,
-                            x.rects.iter().map(|x| x.size.height).max().unwrap_or(0)
+                            x.rects.iter().map(|x| x.height()).max().unwrap_or(0)
                                 ..=x.container.height,
                         )
                             .prop_map(|(width, height)| Size::new(width, height)),
