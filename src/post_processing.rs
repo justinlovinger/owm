@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use ndarray::prelude::*;
 
-use crate::types::{RangeExclusive, Rect, Size};
+use crate::rect::{RangeExclusive, Rect, Size};
 
 pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
     for rect in rects.iter_mut() {
@@ -422,8 +422,8 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
+        rect::{covered_area, obscured_area},
         testing::{ContainedRects, NumRectsRange},
-        types::{covered_area, obscured_area},
     };
 
     use super::*;

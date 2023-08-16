@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::types::{covered_area, obscured_area, Pos, Rect, Size};
+use crate::rect::{covered_area, obscured_area, Pos, Rect, Size};
 
 pub struct Problem {
     gaps: MinimizeGaps,

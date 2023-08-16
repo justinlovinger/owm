@@ -5,7 +5,7 @@ use ndarray::prelude::*;
 use crate::{
     binary::ToFracLE,
     post_processing::{remove_gaps, trim_outside},
-    types::{Rect, Size},
+    rect::{Rect, Size},
 };
 
 #[derive(Clone, Debug)]

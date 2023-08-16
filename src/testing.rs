@@ -1,6 +1,6 @@
 use proptest::prelude::{prop::collection::vec, *};
 
-use crate::{types::RangeExclusive, Rect, Size};
+use crate::{rect::RangeExclusive, Rect, Size};
 
 #[derive(Debug, Clone)]
 pub struct ContainedRects {

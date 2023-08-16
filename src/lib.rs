@@ -2,7 +2,7 @@ mod binary;
 mod encoding;
 mod objective;
 mod post_processing;
-mod types;
+mod rect;
 
 #[cfg(test)]
 mod testing;
@@ -15,7 +15,7 @@ use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
 
 use crate::objective::Problem;
-pub use crate::types::{Pos, Rect, Size};
+pub use crate::rect::{Pos, Rect, Size};
 
 pub fn layout(width: usize, height: usize, count: usize) -> Vec<Rect> {
     let container = Size { width, height };
