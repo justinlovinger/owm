@@ -4,7 +4,7 @@ use std::thread;
 
 use clap::Parser;
 use once_cell::sync::Lazy;
-use owm::{LayoutGen, LayoutGenBuilder, Ratio, Rect, Size, Weight};
+use owm::{LayoutGen, Ratio, Rect, Size, Weight, Weights};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -26,85 +26,68 @@ use crate::protocol::{
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[arg(long)]
-    min_width: Option<usize>,
+    #[arg(long, value_name = "UINT", default_value_t = 320)]
+    min_width: usize,
 
-    #[arg(long)]
-    min_height: Option<usize>,
+    #[arg(long, value_name = "UINT", default_value_t = 180)]
+    min_height: usize,
 
-    #[arg(long)]
-    max_width: Option<Option<usize>>,
+    #[arg(long, value_name = "UINT", num_args = 0..=1, default_value = "1920")]
+    max_width: Option<usize>,
 
-    #[arg(long)]
+    // `Clap` cannot take `None` as a default value,
+    // see <https://github.com/clap-rs/clap/issues/5078>.
+    /// [default: []]
+    #[arg(long, value_name = "UINT")]
     max_height: Option<Option<usize>>,
 
-    /// Weight of "minimize gaps" objective
-    #[arg(long)]
-    gaps_weight: Option<Weight>,
+    /// Importance of "minimize gaps" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
+    gaps_weight: Weight,
 
-    /// Weight of "minimize overlap" objective
-    #[arg(long)]
-    overlap_weight: Option<Weight>,
-
-    /// Weight of "maintain area ratio" objective
-    #[arg(long)]
-    area_ratio_weight: Option<Weight>,
+    /// Importance of "minimize overlap" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(2.0).unwrap())]
+    overlap_weight: Weight,
 
     /// Desired area ratio between each window and the next
-    #[arg(long)]
-    area_ratio: Option<Ratio>,
+    #[arg(long, value_name = "RATIO", default_value_t = Ratio::new(2.0).unwrap())]
+    area_ratio: Ratio,
 
-    /// Weight of "place adjacent close" objective
-    #[arg(long)]
-    adjacent_close_weight: Option<Weight>,
+    /// Importance of "maintain area ratio" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
+    area_ratio_weight: Weight,
 
-    /// Weight of "place in reading order" objective
-    #[arg(long)]
-    reading_order_weight: Option<Weight>,
+    /// Importance of "place adjacent close" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
+    adjacent_close_weight: Weight,
 
-    /// Weight of "center main" objective
-    #[arg(long)]
-    center_main_weight: Option<Weight>,
+    /// Importance of "place in reading order" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
+    reading_order_weight: Weight,
+
+    /// Importance of "center main" objective
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
+    center_main_weight: Weight,
 }
 
 fn main() {
     let args = Args::parse();
 
-    let mut builder = LayoutGenBuilder::new();
-    if let Some(min_width) = args.min_width {
-        builder = builder.min_width(min_width);
-    }
-    if let Some(min_height) = args.min_height {
-        builder = builder.min_height(min_height);
-    }
-    if let Some(max_width) = args.max_width {
-        builder = builder.max_width(max_width);
-    }
-    if let Some(max_height) = args.max_height {
-        builder = builder.max_height(max_height);
-    }
-    if let Some(gaps_weight) = args.gaps_weight {
-        builder = builder.gaps_weight(gaps_weight);
-    }
-    if let Some(overlap_weight) = args.overlap_weight {
-        builder = builder.overlap_weight(overlap_weight);
-    }
-    if let Some(area_ratio_weight) = args.area_ratio_weight {
-        builder = builder.area_ratio_weight(area_ratio_weight);
-    }
-    if let Some(adjacent_close_weight) = args.adjacent_close_weight {
-        builder = builder.adjacent_close_weight(adjacent_close_weight);
-    }
-    if let Some(reading_order_weight) = args.reading_order_weight {
-        builder = builder.reading_order_weight(reading_order_weight);
-    }
-    if let Some(center_main_weight) = args.center_main_weight {
-        builder = builder.center_main_weight(center_main_weight);
-    }
-    if let Some(area_ratio) = args.area_ratio {
-        builder = builder.area_ratio(area_ratio);
-    }
-    let mut layout_manager = LayoutManager::new(builder.build());
+    let mut layout_manager = LayoutManager::new(LayoutGen::new(
+        args.min_width,
+        args.min_height,
+        args.max_width,
+        args.max_height.unwrap_or(None),
+        Weights {
+            gaps_weight: args.gaps_weight,
+            overlap_weight: args.overlap_weight,
+            area_ratio_weight: args.area_ratio_weight,
+            adjacent_close_weight: args.adjacent_close_weight,
+            reading_order_weight: args.reading_order_weight,
+            center_main_weight: args.center_main_weight,
+        },
+        args.area_ratio,
+    ));
 
     let conn = Connection::connect_to_env().unwrap();
     let mut event_queue = conn.new_event_queue();

@@ -29,19 +29,6 @@ pub struct Weights {
     pub center_main_weight: Weight,
 }
 
-impl Default for Weights {
-    fn default() -> Self {
-        Self {
-            gaps_weight: Weight(3.0),
-            overlap_weight: Weight(2.0),
-            area_ratio_weight: Weight(1.5),
-            adjacent_close_weight: Weight(0.5),
-            reading_order_weight: Weight(0.5),
-            center_main_weight: Weight(3.0),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
 pub struct Weight(f64);
 
