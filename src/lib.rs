@@ -72,7 +72,7 @@ impl LayoutGen {
             }
             .argmin(
                 &mut Config {
-                    num_samples: NumSamples::new(200).unwrap(),
+                    num_samples: NumSamples::new(500).unwrap(),
                     adjust_rate: AdjustRate::new(0.1).unwrap(),
                     mutation_chance: MutationChance::new(0.0).unwrap(),
                     mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),

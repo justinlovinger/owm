@@ -46,7 +46,7 @@ struct Args {
     gaps_weight: Weight,
 
     /// Importance of "minimize overlap" objective.
-    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(2.0).unwrap())]
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(6.0).unwrap())]
     overlap_weight: Weight,
 
     /// Desired area ratios between each window and the next.
@@ -74,7 +74,7 @@ struct Args {
     reading_order_weight: Weight,
 
     /// Importance of "center main" objective.
-    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
     center_main_weight: Weight,
 }
 
