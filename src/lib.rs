@@ -38,7 +38,7 @@ pub struct LayoutGenBuilder {
     max_width: Option<Option<usize>>,
     max_height: Option<Option<usize>>,
     gaps_weight: Option<Weight>,
-    overlapping_weight: Option<Weight>,
+    overlap_weight: Option<Weight>,
     area_ratio_weight: Option<Weight>,
     adjacent_close_weight: Option<Weight>,
     reading_order_weight: Option<Weight>,
@@ -54,7 +54,7 @@ impl LayoutGenBuilder {
             max_width: None,
             max_height: None,
             gaps_weight: None,
-            overlapping_weight: None,
+            overlap_weight: None,
             area_ratio_weight: None,
             adjacent_close_weight: None,
             reading_order_weight: None,
@@ -88,8 +88,8 @@ impl LayoutGenBuilder {
         self
     }
 
-    pub fn overlapping_weight(mut self, value: Weight) -> Self {
-        self.overlapping_weight = Some(value);
+    pub fn overlap_weight(mut self, value: Weight) -> Self {
+        self.overlap_weight = Some(value);
         self
     }
 
@@ -126,7 +126,7 @@ impl LayoutGenBuilder {
             max_height: self.max_height.unwrap_or(None),
             weights: Weights {
                 gaps_weight: self.gaps_weight.unwrap_or(Weight::new(3.0).unwrap()),
-                overlapping_weight: self.overlapping_weight.unwrap_or(Weight::new(2.0).unwrap()),
+                overlap_weight: self.overlap_weight.unwrap_or(Weight::new(2.0).unwrap()),
                 area_ratio_weight: self.area_ratio_weight.unwrap_or(Weight::new(1.5).unwrap()),
                 adjacent_close_weight: self
                     .adjacent_close_weight

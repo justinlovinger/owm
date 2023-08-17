@@ -12,7 +12,7 @@ use crate::{
 pub struct Problem {
     weights: Weights,
     gaps: MinimizeGaps,
-    overlapping: MinimizeOverlapping,
+    overlap: MinimizeOverlap,
     area_ratio: MaintainAreaRatio,
     adjacent_close: PlaceAdjacentClose,
     reading_order: PlaceInReadingOrder,
@@ -22,7 +22,7 @@ pub struct Problem {
 #[derive(Clone, Copy, Debug)]
 pub struct Weights {
     pub gaps_weight: Weight,
-    pub overlapping_weight: Weight,
+    pub overlap_weight: Weight,
     pub area_ratio_weight: Weight,
     pub adjacent_close_weight: Weight,
     pub reading_order_weight: Weight,
@@ -33,7 +33,7 @@ impl Default for Weights {
     fn default() -> Self {
         Self {
             gaps_weight: Weight(3.0),
-            overlapping_weight: Weight(2.0),
+            overlap_weight: Weight(2.0),
             area_ratio_weight: Weight(1.5),
             adjacent_close_weight: Weight(0.5),
             reading_order_weight: Weight(0.5),
@@ -68,7 +68,7 @@ impl Problem {
         Self {
             weights,
             gaps: MinimizeGaps::new(container),
-            overlapping: MinimizeOverlapping::new(container, count),
+            overlap: MinimizeOverlap::new(container, count),
             area_ratio: MaintainAreaRatio::new(area_ratio, container, count),
             adjacent_close: PlaceAdjacentClose::new(container, count),
             reading_order: PlaceInReadingOrder::new(count),
@@ -81,8 +81,8 @@ impl Problem {
             self.weights.gaps_weight * self.gaps.evaluate(rects)
         } else {
             0.0
-        }) + (if self.weights.overlapping_weight > Weight(0.0) {
-            self.weights.overlapping_weight * self.overlapping.evaluate(rects)
+        }) + (if self.weights.overlap_weight > Weight(0.0) {
+            self.weights.overlap_weight * self.overlap.evaluate(rects)
         } else {
             0.0
         }) + (if self.weights.area_ratio_weight > Weight(0.0) {
@@ -128,11 +128,11 @@ impl MinimizeGaps {
     }
 }
 
-struct MinimizeOverlapping {
+struct MinimizeOverlap {
     worst_case: f64,
 }
 
-impl MinimizeOverlapping {
+impl MinimizeOverlap {
     fn new(container: Size, count: usize) -> Self {
         Self {
             worst_case: (count.saturating_sub(1) * container.area()) as f64,
@@ -350,18 +350,18 @@ mod tests {
     }
 
     #[proptest]
-    fn minimize_overlapping_returns_values_in_range_0_1(x: ContainedRects) {
+    fn minimize_overlap_returns_values_in_range_0_1(x: ContainedRects) {
         prop_assert!((0.0..=1.0)
-            .contains(&MinimizeOverlapping::new(x.container, x.rects.len()).evaluate(&x.rects)))
+            .contains(&MinimizeOverlap::new(x.container, x.rects.len()).evaluate(&x.rects)))
     }
 
     #[proptest]
-    fn minimize_overlapping_returns_1_for_worst_case(
+    fn minimize_overlap_returns_1_for_worst_case(
         container: Size,
         #[strategy((2_usize..=16))] count: usize,
     ) {
         prop_assert_eq!(
-            MinimizeOverlapping::new(container, count).evaluate(
+            MinimizeOverlap::new(container, count).evaluate(
                 &repeat(Rect::new(0, 0, container.width, container.height))
                     .take(count)
                     .collect_vec()
@@ -371,12 +371,12 @@ mod tests {
     }
 
     #[proptest]
-    fn minimize_overlapping_returns_0_for_less_than_2_rects(
+    fn minimize_overlap_returns_0_for_less_than_2_rects(
         container: Size,
         #[strategy((0_usize..=1))] count: usize,
     ) {
         prop_assert_eq!(
-            MinimizeOverlapping::new(container, count).evaluate(
+            MinimizeOverlap::new(container, count).evaluate(
                 &repeat(Rect::new(0, 0, container.width, container.height))
                     .take(count)
                     .collect_vec()
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn minimize_overlapping_returns_0_for_best_case() {
+    fn minimize_overlap_returns_0_for_best_case() {
         let container = Size {
             width: 10,
             height: 10,
@@ -397,7 +397,7 @@ mod tests {
             Rect::new(5, 5, 5, 5),
         ];
         assert_eq!(
-            MinimizeOverlapping::new(container, rects.len()).evaluate(&rects),
+            MinimizeOverlap::new(container, rects.len()).evaluate(&rects),
             0.0
         )
     }

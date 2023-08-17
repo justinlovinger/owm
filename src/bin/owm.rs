@@ -42,9 +42,9 @@ struct Args {
     #[arg(long)]
     gaps_weight: Option<Weight>,
 
-    /// Weight of "minimize overlapping" objective
+    /// Weight of "minimize overlap" objective
     #[arg(long)]
-    overlapping_weight: Option<Weight>,
+    overlap_weight: Option<Weight>,
 
     /// Weight of "maintain area ratio" objective
     #[arg(long)]
@@ -86,8 +86,8 @@ fn main() {
     if let Some(gaps_weight) = args.gaps_weight {
         builder = builder.gaps_weight(gaps_weight);
     }
-    if let Some(overlapping_weight) = args.overlapping_weight {
-        builder = builder.overlapping_weight(overlapping_weight);
+    if let Some(overlap_weight) = args.overlap_weight {
+        builder = builder.overlap_weight(overlap_weight);
     }
     if let Some(area_ratio_weight) = args.area_ratio_weight {
         builder = builder.area_ratio_weight(area_ratio_weight);
