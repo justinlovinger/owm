@@ -28,7 +28,7 @@ pub struct LayoutGen {
     max_width: Option<usize>,
     max_height: Option<usize>,
     weights: Weights,
-    area_ratio: Ratio,
+    area_ratios: Vec<Ratio>,
 }
 
 impl LayoutGen {
@@ -38,7 +38,7 @@ impl LayoutGen {
         max_width: Option<usize>,
         max_height: Option<usize>,
         weights: Weights,
-        area_ratio: Ratio,
+        area_ratios: Vec<Ratio>,
     ) -> Self {
         Self {
             min_width,
@@ -46,7 +46,7 @@ impl LayoutGen {
             max_width,
             max_height,
             weights,
-            area_ratio,
+            area_ratios,
         }
     }
 
@@ -65,7 +65,7 @@ impl LayoutGen {
             container,
             count,
         );
-        let problem = Problem::new(self.weights, self.area_ratio, container, count);
+        let problem = Problem::new(self.weights, self.area_ratios.clone(), container, count);
         let mut rects = decoder.decode1(
             UntilConvergedConfig {
                 threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),

@@ -41,31 +41,39 @@ struct Args {
     #[arg(long, value_name = "UINT")]
     max_height: Option<Option<usize>>,
 
-    /// Importance of "minimize gaps" objective
+    /// Importance of "minimize gaps" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
     gaps_weight: Weight,
 
-    /// Importance of "minimize overlap" objective
+    /// Importance of "minimize overlap" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(2.0).unwrap())]
     overlap_weight: Weight,
 
-    /// Desired area ratio between each window and the next
-    #[arg(long, value_name = "RATIO", default_value_t = Ratio::new(2.0).unwrap())]
-    area_ratio: Ratio,
+    /// Desired area ratios between each window and the next.
+    ///
+    /// Values are comma-separated.
+    /// Last value is repeated for further pairs.
+    #[arg(
+        long,
+        value_name = "RATIOS",
+        value_delimiter = ',',
+        default_value = "3,2,1"
+    )]
+    area_ratios: Vec<Ratio>,
 
-    /// Importance of "maintain area ratio" objective
+    /// Importance of "maintain area ratio" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
     area_ratio_weight: Weight,
 
-    /// Importance of "place adjacent close" objective
+    /// Importance of "place adjacent close" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
     adjacent_close_weight: Weight,
 
-    /// Importance of "place in reading order" objective
+    /// Importance of "place in reading order" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
     reading_order_weight: Weight,
 
-    /// Importance of "center main" objective
+    /// Importance of "center main" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
     center_main_weight: Weight,
 }
@@ -81,12 +89,12 @@ fn main() {
         Weights {
             gaps_weight: args.gaps_weight,
             overlap_weight: args.overlap_weight,
-            area_ratio_weight: args.area_ratio_weight,
+            area_ratios_weight: args.area_ratio_weight,
             adjacent_close_weight: args.adjacent_close_weight,
             reading_order_weight: args.reading_order_weight,
             center_main_weight: args.center_main_weight,
         },
-        args.area_ratio,
+        args.area_ratios,
     ));
 
     let conn = Connection::connect_to_env().unwrap();
