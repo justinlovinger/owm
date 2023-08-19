@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -32,14 +33,11 @@ struct Args {
     #[arg(long, value_name = "UINT", default_value_t = 180)]
     min_height: usize,
 
-    #[arg(long, value_name = "UINT", num_args = 0..=1, default_value = "1920")]
-    max_width: Option<usize>,
+    #[arg(long, value_name = "UINT", value_parser = usize_option_parser, default_value = "1920")]
+    max_width: std::option::Option<usize>,
 
-    // `Clap` cannot take `None` as a default value,
-    // see <https://github.com/clap-rs/clap/issues/5078>.
-    /// [default: []]
-    #[arg(long, value_name = "UINT")]
-    max_height: Option<Option<usize>>,
+    #[arg(long, value_name = "UINT", value_parser = usize_option_parser, default_value = "")]
+    max_height: std::option::Option<usize>,
 
     /// Importance of "minimize gaps" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
@@ -78,6 +76,21 @@ struct Args {
     center_main_weight: Weight,
 }
 
+fn usize_option_parser(s: &str) -> Result<Option<usize>, <usize as FromStr>::Err> {
+    option_parser(s)
+}
+
+fn option_parser<T>(s: &str) -> Result<Option<T>, <T as FromStr>::Err>
+where
+    T: FromStr,
+{
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        s.parse().map(Some)
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -85,7 +98,7 @@ fn main() {
         args.min_width,
         args.min_height,
         args.max_width,
-        args.max_height.unwrap_or(None),
+        args.max_height,
         Weights {
             gaps_weight: args.gaps_weight,
             overlap_weight: args.overlap_weight,
