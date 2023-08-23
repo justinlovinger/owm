@@ -2,6 +2,13 @@
 name = "owm"
 version = "0.1.0"
 edition = "2021"
+authors = ["Justin Lovinger"]
+description = "An experimental River layout generator using mathematical optimization to invent layouts on-the-fly"
+repository = "https://github.com/justinlovinger/owm"
+readme = "README.md"
+keywords = ["optimization", "river", "window-manager"]
+categories = ["command-line-utilities"]
+license = "MIT"
 
 [dependencies]
 clap = { version = "4.3.21", features = ["derive"] }
