@@ -39,6 +39,11 @@ struct Args {
     #[arg(long, value_name = "UINT", value_parser = usize_option_parser, default_value = "")]
     max_height: std::option::Option<usize>,
 
+    /// Set to border thickness
+    /// to fully overlap borders.
+    #[arg(long, value_name = "UINT", default_value = "0")]
+    overlap_borders_by: usize,
+
     /// Importance of "minimize gaps" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
     gaps_weight: Weight,
@@ -99,6 +104,7 @@ fn main() {
         args.min_height,
         args.max_width,
         args.max_height,
+        args.overlap_borders_by,
         Weights {
             gaps_weight: args.gaps_weight,
             overlap_weight: args.overlap_weight,

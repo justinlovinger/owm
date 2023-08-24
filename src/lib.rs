@@ -27,6 +27,7 @@ pub struct LayoutGen {
     min_height: usize,
     max_width: Option<usize>,
     max_height: Option<usize>,
+    overlap_borders_by: usize,
     weights: Weights,
     area_ratios: Vec<Ratio>,
 }
@@ -37,6 +38,7 @@ impl LayoutGen {
         min_height: usize,
         max_width: Option<usize>,
         max_height: Option<usize>,
+        overlap_borders_by: usize,
         weights: Weights,
         area_ratios: Vec<Ratio>,
     ) -> Self {
@@ -45,6 +47,7 @@ impl LayoutGen {
             min_height,
             max_width,
             max_height,
+            overlap_borders_by,
             weights,
             area_ratios,
         }
@@ -89,7 +92,9 @@ impl LayoutGen {
             )
             .view(),
         );
-        overlap_borders(1, container, rects.view_mut());
+        if self.overlap_borders_by > 0 {
+            overlap_borders(self.overlap_borders_by, container, rects.view_mut());
+        }
         rects.into_raw_vec()
     }
 }
