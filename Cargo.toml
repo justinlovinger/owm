@@ -21,6 +21,7 @@ optimal = { git = "https://github.com/justinlovinger/optimal-rs.git" }
 paste = "1.0.14"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
+rayon = "1.7.0"
 thiserror = "1.0.46"
 wayland-client = "0.30.2"
 wayland-scanner = "0.30.1"

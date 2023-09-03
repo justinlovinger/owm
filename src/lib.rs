@@ -9,11 +9,11 @@ mod rect;
 mod testing;
 
 use encoding::Decoder;
-use ndarray::Axis;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 use post_processing::overlap_borders;
 use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
+use rayon::prelude::*;
 
 use crate::objective::Problem;
 pub use crate::{
@@ -75,7 +75,10 @@ impl LayoutGen {
             }
             .argmin(
                 &mut Config {
-                    num_samples: NumSamples::new(500).unwrap(),
+                    num_samples: NumSamples::new(
+                        500 * std::thread::available_parallelism().map_or(1, |x| x.into()),
+                    )
+                    .unwrap(),
                     adjust_rate: AdjustRate::new(0.1).unwrap(),
                     mutation_chance: MutationChance::new(0.0).unwrap(),
                     mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
@@ -83,9 +86,13 @@ impl LayoutGen {
                 .start_using(
                     decoder.bits(),
                     |points| {
-                        decoder
-                            .decode2(points)
-                            .map_axis(Axis(1), |rects| problem.evaluate(rects.as_slice().unwrap()))
+                        (0..points.nrows())
+                            .into_par_iter()
+                            .map(|i| {
+                                problem.evaluate(decoder.decode1(points.row(i)).as_slice().unwrap())
+                            })
+                            .collect::<Vec<_>>()
+                            .into()
                     },
                     &mut SplitMix64::seed_from_u64(0),
                 ),
