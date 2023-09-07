@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use clap::Parser;
 use once_cell::sync::Lazy;
-use owm::{LayoutGen, Ratio, Rect, Size, Weight, Weights};
+use owm::{AreaRatio, AspectRatio, LayoutGen, Rect, Size, Weight, Weights};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -27,17 +28,17 @@ use crate::protocol::{
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[arg(long, value_name = "UINT", default_value_t = 320)]
-    min_width: usize,
+    #[arg(long, value_name = "NON_ZERO_UINT", default_value_t = NonZeroUsize::new(320).unwrap())]
+    min_width: NonZeroUsize,
 
-    #[arg(long, value_name = "UINT", default_value_t = 180)]
-    min_height: usize,
+    #[arg(long, value_name = "NON_ZERO_UINT", default_value_t = NonZeroUsize::new(180).unwrap())]
+    min_height: NonZeroUsize,
 
-    #[arg(long, value_name = "UINT", value_parser = usize_option_parser, default_value = "1920")]
-    max_width: std::option::Option<usize>,
+    #[arg(long, value_name = "NON_ZERO_UINT", value_parser = non_zero_usize_option_parser, default_value = "1920")]
+    max_width: std::option::Option<NonZeroUsize>,
 
-    #[arg(long, value_name = "UINT", value_parser = usize_option_parser, default_value = "")]
-    max_height: std::option::Option<usize>,
+    #[arg(long, value_name = "NON_ZERO_UINT", value_parser = non_zero_usize_option_parser, default_value = "")]
+    max_height: std::option::Option<NonZeroUsize>,
 
     /// Set to border thickness
     /// to fully overlap borders.
@@ -45,7 +46,7 @@ struct Args {
     overlap_borders_by: usize,
 
     /// Importance of "minimize gaps" objective.
-    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(5.0).unwrap())]
     gaps_weight: Weight,
 
     /// Importance of "minimize overlap" objective.
@@ -63,11 +64,28 @@ struct Args {
         value_delimiter = ',',
         default_value = "3,2,1"
     )]
-    area_ratios: Vec<Ratio>,
+    area_ratios: Vec<AreaRatio>,
 
     /// Importance of "maintain area ratios" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
     area_ratios_weight: Weight,
+
+    /// Desired aspect ratios of windows.
+    ///
+    /// Values are comma-separated.
+    /// Last value is repeated for further windows.
+    /// Each value must be > 0.
+    #[arg(
+        long,
+        value_name = "RATIOS",
+        value_delimiter = ',',
+        default_value = "1.77777"
+    )]
+    aspect_ratios: Vec<AspectRatio>,
+
+    /// Importance of "maintain aspect ratios" objective.
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(3.0).unwrap())]
+    aspect_ratios_weight: Weight,
 
     /// Importance of "place adjacent close" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
@@ -82,7 +100,9 @@ struct Args {
     center_main_weight: Weight,
 }
 
-fn usize_option_parser(s: &str) -> Result<Option<usize>, <usize as FromStr>::Err> {
+fn non_zero_usize_option_parser(
+    s: &str,
+) -> Result<Option<NonZeroUsize>, <NonZeroUsize as FromStr>::Err> {
     option_parser(s)
 }
 
@@ -101,20 +121,22 @@ fn main() {
     let args = Args::parse();
 
     let mut layout_manager = LayoutManager::new(LayoutGen::new(
-        args.min_width,
-        args.min_height,
-        args.max_width,
-        args.max_height,
+        args.min_width.into(),
+        args.min_height.into(),
+        args.max_width.map(|x| x.into()),
+        args.max_height.map(|x| x.into()),
         args.overlap_borders_by,
         Weights {
             gaps_weight: args.gaps_weight,
             overlap_weight: args.overlap_weight,
             area_ratios_weight: args.area_ratios_weight,
+            aspect_ratios_weight: args.aspect_ratios_weight,
             adjacent_close_weight: args.adjacent_close_weight,
             reading_order_weight: args.reading_order_weight,
             center_main_weight: args.center_main_weight,
         },
         args.area_ratios,
+        args.aspect_ratios,
     ));
 
     let conn = Connection::connect_to_env().unwrap();

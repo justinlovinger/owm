@@ -14,6 +14,7 @@ pub struct Problem {
     gaps: MinimizeGaps,
     overlap: MinimizeOverlap,
     area_ratios: MaintainAreaRatios,
+    aspect_ratios: MaintainAspectRatios,
     adjacent_close: PlaceAdjacentClose,
     reading_order: PlaceInReadingOrder,
     center_main: CenterMain,
@@ -24,6 +25,7 @@ pub struct Weights {
     pub gaps_weight: Weight,
     pub overlap_weight: Weight,
     pub area_ratios_weight: Weight,
+    pub aspect_ratios_weight: Weight,
     pub adjacent_close_weight: Weight,
     pub reading_order_weight: Weight,
     pub center_main_weight: Weight,
@@ -51,12 +53,20 @@ impl Mul<f64> for Weight {
 }
 
 impl Problem {
-    pub fn new(weights: Weights, area_ratios: Vec<Ratio>, container: Size, count: usize) -> Self {
+    pub fn new(
+        weights: Weights,
+        area_ratios: Vec<AreaRatio>,
+        aspect_ratios: Vec<AspectRatio>,
+        max_size: Size,
+        container: Size,
+        count: usize,
+    ) -> Self {
         Self {
             weights,
             gaps: MinimizeGaps::new(container),
             overlap: MinimizeOverlap::new(container, count),
-            area_ratios: MaintainAreaRatios::new(area_ratios, container, count),
+            area_ratios: MaintainAreaRatios::new(area_ratios, max_size, count),
+            aspect_ratios: MaintainAspectRatios::new(aspect_ratios, max_size, count),
             adjacent_close: PlaceAdjacentClose::new(container, count),
             reading_order: PlaceInReadingOrder::new(count),
             center_main: CenterMain::new(container),
@@ -74,6 +84,10 @@ impl Problem {
             0.0
         }) + (if self.weights.area_ratios_weight > Weight(0.0) {
             self.weights.area_ratios_weight * self.area_ratios.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.aspect_ratios_weight > Weight(0.0) {
+            self.weights.aspect_ratios_weight * self.aspect_ratios.evaluate(rects)
         } else {
             0.0
         }) + (if self.weights.adjacent_close_weight > Weight(0.0) {
@@ -136,24 +150,24 @@ impl MinimizeOverlap {
 }
 
 struct MaintainAreaRatios {
-    ratios: Vec<Ratio>,
+    ratios: Vec<AreaRatio>,
     worst_case: f64,
 }
 
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
-pub struct Ratio(f64);
+pub struct AreaRatio(f64);
 
-impl LowerBounded for Ratio {
+impl LowerBounded for AreaRatio {
     fn min_value() -> Self {
         Self(1.0)
     }
 }
 
-derive_new_from_lower_bounded_float!(Ratio(f64));
-derive_try_from_from_new!(Ratio(f64));
-derive_from_str_from_try_into!(Ratio(f64));
+derive_new_from_lower_bounded_float!(AreaRatio(f64));
+derive_try_from_from_new!(AreaRatio(f64));
+derive_from_str_from_try_into!(AreaRatio(f64));
 
-impl Mul<f64> for Ratio {
+impl Mul<f64> for AreaRatio {
     type Output = f64;
 
     fn mul(self, rhs: f64) -> Self::Output {
@@ -162,7 +176,7 @@ impl Mul<f64> for Ratio {
 }
 
 impl MaintainAreaRatios {
-    fn new(ratios: Vec<Ratio>, container: Size, count: usize) -> Self {
+    fn new(ratios: Vec<AreaRatio>, max_size: Size, count: usize) -> Self {
         let worst_case = match ratios
             .iter()
             .take(count.saturating_sub(1))
@@ -170,9 +184,9 @@ impl MaintainAreaRatios {
             .copied()
         {
             Some(max_ratio) => {
-                // One pair can be `container.area()` apart in area,
+                // One pair can be `max_size.area()` apart in area,
                 // but then remaining pairs can only be equal at worst.
-                let area = container.area() as f64;
+                let area = max_size.area() as f64;
                 max_ratio * area
                     + ratios
                         .iter()
@@ -212,6 +226,73 @@ impl MaintainAreaRatios {
                 .sum::<f64>()
                 / self.worst_case
         }
+    }
+}
+
+struct MaintainAspectRatios {
+    ratios: Vec<AspectRatio>,
+    worst_case: f64,
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
+pub struct AspectRatio(f64);
+
+impl LowerBounded for AspectRatio {
+    fn min_value() -> Self {
+        Self(f64::EPSILON)
+    }
+}
+
+derive_new_from_lower_bounded_float!(AspectRatio(f64));
+derive_try_from_from_new!(AspectRatio(f64));
+derive_from_str_from_try_into!(AspectRatio(f64));
+
+impl MaintainAspectRatios {
+    fn new(ratios: Vec<AspectRatio>, max_size: Size, count: usize) -> Self {
+        // This assumes rectangles cannot have 0 width or height.
+        let worst_case = if count > 0 && !ratios.is_empty() {
+            ratios
+                .iter()
+                .chain(repeat(ratios.last().unwrap()))
+                .map(|ratio| {
+                    (abs_ratio(max_size.width as f64 / ratio.0))
+                        .max(abs_ratio((1.0 / max_size.height as f64) / ratio.0))
+                        - 1.0
+                })
+                .take(count)
+                .sum()
+        } else {
+            0.0
+        };
+        Self { ratios, worst_case }
+    }
+
+    fn evaluate(&self, rects: &[Rect]) -> f64 {
+        if self.worst_case == 0.0 {
+            0.0
+        } else {
+            rects
+                .iter()
+                .zip(
+                    self.ratios
+                        .iter()
+                        .chain(repeat(self.ratios.last().unwrap()))
+                        .copied(),
+                )
+                .map(|(x, ratio)| {
+                    abs_ratio((x.size.width as f64 / x.size.height as f64) / ratio.0) - 1.0
+                })
+                .sum::<f64>()
+                / self.worst_case
+        }
+    }
+}
+
+fn abs_ratio(x: f64) -> f64 {
+    if x < 1.0 {
+        1.0 / x
+    } else {
+        x
     }
 }
 
@@ -412,13 +493,16 @@ mod tests {
     }
 
     #[proptest]
-    fn maintain_area_ratio_returns_values_in_range_0_1(
+    fn maintain_area_ratios_returns_values_in_range_0_1(
         #[strategy(vec(1.0..=100.0, 0..=16))] ratios: Vec<f64>,
         #[strategy(ContainedRects::arbitrary_with(NumRectsRange(0, 16)))] x: ContainedRects,
     ) {
         prop_assert!((0.0..=1.0).contains(
             &MaintainAreaRatios::new(
-                ratios.into_iter().map(|x| Ratio::new(x).unwrap()).collect(),
+                ratios
+                    .into_iter()
+                    .map(|x| AreaRatio::new(x).unwrap())
+                    .collect(),
                 x.container,
                 x.rects.len()
             )
@@ -427,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn maintain_area_ratio_returns_1_for_worst_case() {
+    fn maintain_area_ratios_returns_1_for_worst_case() {
         // Note,
         // what exactly counts as the worst case
         // is uncertain.
@@ -436,7 +520,7 @@ mod tests {
         // However,
         // then the middle rectangle has a good area
         // for its position.
-        let container = Size {
+        let max_size = Size {
             width: 10,
             height: 10,
         };
@@ -446,14 +530,14 @@ mod tests {
             Rect::new(0, 0, 10, 10),
         ];
         assert_eq!(
-            MaintainAreaRatios::new(vec![Ratio(2.0)], container, rects.len()).evaluate(&rects),
+            MaintainAreaRatios::new(vec![AreaRatio(2.0)], max_size, rects.len()).evaluate(&rects),
             1.0
         )
     }
 
     #[test]
-    fn maintain_area_ratio_returns_0_for_best_case() {
-        let container = Size {
+    fn maintain_area_ratios_returns_0_for_best_case() {
+        let max_size = Size {
             width: 10,
             height: 10,
         };
@@ -463,7 +547,61 @@ mod tests {
             Rect::new(0, 0, 5, 5),
         ];
         assert_eq!(
-            MaintainAreaRatios::new(vec![Ratio(2.0)], container, rects.len()).evaluate(&rects),
+            MaintainAreaRatios::new(vec![AreaRatio(2.0)], max_size, rects.len()).evaluate(&rects),
+            0.0
+        )
+    }
+
+    #[proptest]
+    fn maintain_aspect_ratios_returns_values_in_range_0_1(
+        #[strategy(vec(f64::EPSILON..=100.0, 0..=16))] ratios: Vec<f64>,
+        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(0, 16)))] x: ContainedRects,
+    ) {
+        prop_assert!((0.0..=1.0).contains(
+            &MaintainAspectRatios::new(
+                ratios
+                    .into_iter()
+                    .map(|x| AspectRatio::new(x).unwrap())
+                    .collect(),
+                x.container,
+                x.rects.len()
+            )
+            .evaluate(&x.rects)
+        ))
+    }
+
+    #[test]
+    fn maintain_aspect_ratios_returns_1_for_worst_case() {
+        let max_size = Size {
+            width: 10,
+            height: 10,
+        };
+        let rects = [Rect::new(0, 0, 1, 10), Rect::new(0, 0, 10, 1)];
+        assert_eq!(
+            MaintainAspectRatios::new(
+                vec![AspectRatio(2.0), AspectRatio(0.5)],
+                max_size,
+                rects.len()
+            )
+            .evaluate(&rects),
+            1.0
+        )
+    }
+
+    #[test]
+    fn maintain_aspect_ratios_returns_0_for_best_case() {
+        let max_size = Size {
+            width: 10,
+            height: 10,
+        };
+        let rects = [Rect::new(0, 0, 10, 5), Rect::new(0, 0, 5, 10)];
+        assert_eq!(
+            MaintainAspectRatios::new(
+                vec![AspectRatio(2.0), AspectRatio(0.5)],
+                max_size,
+                rects.len()
+            )
+            .evaluate(&rects),
             0.0
         )
     }

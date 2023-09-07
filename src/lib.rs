@@ -17,7 +17,7 @@ use rayon::prelude::*;
 
 use crate::objective::Problem;
 pub use crate::{
-    objective::{Ratio, Weight, Weights},
+    objective::{AreaRatio, AspectRatio, Weight, Weights},
     rect::{Pos, Rect, Size},
 };
 
@@ -29,10 +29,12 @@ pub struct LayoutGen {
     max_height: Option<usize>,
     overlap_borders_by: usize,
     weights: Weights,
-    area_ratios: Vec<Ratio>,
+    area_ratios: Vec<AreaRatio>,
+    aspect_ratios: Vec<AspectRatio>,
 }
 
 impl LayoutGen {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         min_width: usize,
         min_height: usize,
@@ -40,7 +42,8 @@ impl LayoutGen {
         max_height: Option<usize>,
         overlap_borders_by: usize,
         weights: Weights,
-        area_ratios: Vec<Ratio>,
+        area_ratios: Vec<AreaRatio>,
+        aspect_ratios: Vec<AspectRatio>,
     ) -> Self {
         Self {
             min_width,
@@ -50,25 +53,34 @@ impl LayoutGen {
             overlap_borders_by,
             weights,
             area_ratios,
+            aspect_ratios,
         }
     }
 
     pub fn layout(&self, container: Size, count: usize) -> Vec<Rect> {
+        let max_size = Size::new(
+            self.max_width
+                .map_or(container.width, |x| x.min(container.width)),
+            self.max_height
+                .map_or(container.height, |x| x.min(container.height)),
+        );
         let decoder = Decoder::new(
             Size::new(
                 self.min_width.min(container.width),
                 self.min_height.min(container.height),
             ),
-            Size::new(
-                self.max_width
-                    .map_or(container.width, |x| x.min(container.width)),
-                self.max_height
-                    .map_or(container.height, |x| x.min(container.height)),
-            ),
+            max_size,
             container,
             count,
         );
-        let problem = Problem::new(self.weights, self.area_ratios.clone(), container, count);
+        let problem = Problem::new(
+            self.weights,
+            self.area_ratios.clone(),
+            self.aspect_ratios.clone(),
+            max_size,
+            container,
+            count,
+        );
         let mut rects = decoder.decode1(
             UntilConvergedConfig {
                 threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
