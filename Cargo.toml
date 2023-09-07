@@ -10,6 +10,10 @@ keywords = ["optimization", "river", "window-manager"]
 categories = ["command-line-utilities"]
 license = "MIT"
 
+[profile.dev]
+# Generating layouts is significantly slower than compiling.
+opt-level = 3
+
 [dependencies]
 clap = { version = "4.3.21", features = ["derive"] }
 derive_more = "0.99.17"
