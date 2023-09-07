@@ -56,6 +56,7 @@ struct Args {
     ///
     /// Values are comma-separated.
     /// Last value is repeated for further pairs.
+    /// Each value must be >= 1.
     #[arg(
         long,
         value_name = "RATIOS",
@@ -64,9 +65,9 @@ struct Args {
     )]
     area_ratios: Vec<Ratio>,
 
-    /// Importance of "maintain area ratio" objective.
+    /// Importance of "maintain area ratios" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
-    area_ratio_weight: Weight,
+    area_ratios_weight: Weight,
 
     /// Importance of "place adjacent close" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(0.5).unwrap())]
@@ -108,7 +109,7 @@ fn main() {
         Weights {
             gaps_weight: args.gaps_weight,
             overlap_weight: args.overlap_weight,
-            area_ratios_weight: args.area_ratio_weight,
+            area_ratios_weight: args.area_ratios_weight,
             adjacent_close_weight: args.adjacent_close_weight,
             reading_order_weight: args.reading_order_weight,
             center_main_weight: args.center_main_weight,
