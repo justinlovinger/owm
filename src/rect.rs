@@ -1,4 +1,4 @@
-use std::cmp::PartialOrd;
+use std::{cmp::PartialOrd, num::NonZeroUsize};
 
 use itertools::Itertools;
 
@@ -16,15 +16,22 @@ pub struct Pos {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Size {
-    pub width: usize,
-    pub height: usize,
+    pub width: NonZeroUsize,
+    pub height: NonZeroUsize,
 }
 
 impl Rect {
-    pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+    pub fn new(x: usize, y: usize, width: NonZeroUsize, height: NonZeroUsize) -> Self {
         Self {
-            pos: Pos { x, y },
-            size: Size { width, height },
+            pos: Pos::new(x, y),
+            size: Size::new(width, height),
+        }
+    }
+
+    pub fn new_checked(x: usize, y: usize, width: usize, height: usize) -> Self {
+        Self {
+            pos: Pos::new(x, y),
+            size: Size::new_checked(width, height),
         }
     }
 
@@ -36,11 +43,11 @@ impl Rect {
         self.pos.y
     }
 
-    pub fn width(&self) -> usize {
+    pub fn width(&self) -> NonZeroUsize {
         self.size.width
     }
 
-    pub fn height(&self) -> usize {
+    pub fn height(&self) -> NonZeroUsize {
         self.size.height
     }
 
@@ -49,7 +56,7 @@ impl Rect {
     }
 
     pub fn right(&self) -> usize {
-        self.pos.x + self.size.width
+        self.pos.x + self.size.width.get()
     }
 
     pub fn top(&self) -> usize {
@@ -57,7 +64,7 @@ impl Rect {
     }
 
     pub fn bottom(&self) -> usize {
-        self.pos.y + self.size.height
+        self.pos.y + self.size.height.get()
     }
 
     pub fn center(&self) -> Pos {
@@ -65,11 +72,11 @@ impl Rect {
     }
 
     pub fn center_x(&self) -> usize {
-        self.left() + self.size.width / 2
+        self.left() + self.size.width.get() / 2
     }
 
     pub fn center_y(&self) -> usize {
-        self.top() + self.size.height / 2
+        self.top() + self.size.height.get() / 2
     }
 
     pub fn top_left(&self) -> Pos {
@@ -102,20 +109,28 @@ impl Rect {
 
     pub fn expand_left(&mut self, value: usize) {
         self.pos.x -= value;
-        self.size.width += value;
+        // Values should be small enough,
+        // we do not expect overflow.
+        self.size.width = unsafe { NonZeroUsize::new_unchecked(self.size.width.get() + value) };
     }
 
     pub fn expand_right(&mut self, value: usize) {
-        self.size.width += value;
+        // Values should be small enough,
+        // we do not expect overflow.
+        self.size.width = unsafe { NonZeroUsize::new_unchecked(self.size.width.get() + value) };
     }
 
     pub fn expand_top(&mut self, value: usize) {
         self.pos.y -= value;
-        self.size.height += value;
+        // Values should be small enough,
+        // we do not expect overflow.
+        self.size.height = unsafe { NonZeroUsize::new_unchecked(self.size.height.get() + value) };
     }
 
     pub fn expand_bottom(&mut self, value: usize) {
-        self.size.height += value;
+        // Values should be small enough,
+        // we do not expect overflow.
+        self.size.height = unsafe { NonZeroUsize::new_unchecked(self.size.height.get() + value) };
     }
 
     pub fn x_range_exclusive(&self) -> RangeExclusive<usize> {
@@ -126,7 +141,7 @@ impl Rect {
         RangeExclusive(self.top(), self.bottom())
     }
 
-    pub fn area(&self) -> usize {
+    pub fn area(&self) -> NonZeroUsize {
         self.size.area()
     }
 
@@ -139,9 +154,11 @@ impl Rect {
         if left < right && top < bottom {
             Some(Rect {
                 pos: Pos { x: left, y: top },
+                // We already checked
+                // these values are not equal.
                 size: Size {
-                    width: right - left,
-                    height: bottom - top,
+                    width: unsafe { NonZeroUsize::new_unchecked(right - left) },
+                    height: unsafe { NonZeroUsize::new_unchecked(bottom - top) },
                 },
             })
         } else {
@@ -170,20 +187,29 @@ impl Pos {
 }
 
 impl Size {
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn new(width: NonZeroUsize, height: NonZeroUsize) -> Self {
         Self { width, height }
     }
 
-    pub fn area(&self) -> usize {
-        self.width * self.height
+    pub fn new_checked(width: usize, height: usize) -> Self {
+        Self {
+            width: width.try_into().unwrap(),
+            height: height.try_into().unwrap(),
+        }
+    }
+
+    pub fn area(&self) -> NonZeroUsize {
+        // Area cannot be zero
+        // if dimensions are not.
+        unsafe { NonZeroUsize::new_unchecked(self.width.get() * self.height.get()) }
     }
 }
 
 impl From<Size> for Pos {
     fn from(value: Size) -> Self {
         Pos {
-            x: value.width,
-            y: value.height,
+            x: value.width.get(),
+            y: value.height.get(),
         }
     }
 }
@@ -192,7 +218,7 @@ impl From<Size> for Pos {
 // <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
 // This could be optimized using segment trees.
 /// Return the total area of a union of rectangles.
-pub fn covered_area(rects: &[Rect]) -> usize {
+pub fn covered_area(rects: &[Rect]) -> NonZeroUsize {
     let mut xs = rects
         .iter()
         .flat_map(|rect| [rect.left(), rect.right()])
@@ -203,7 +229,8 @@ pub fn covered_area(rects: &[Rect]) -> usize {
     let mut rects = rects.to_vec();
     rects.sort_by_key(|rect| rect.top());
 
-    xs.into_iter()
+    let area = xs
+        .into_iter()
         .tuple_windows()
         .map(|(left, right)| {
             let width = right - left;
@@ -218,7 +245,10 @@ pub fn covered_area(rects: &[Rect]) -> usize {
                 })
                 .sum::<usize>()
         })
-        .sum()
+        .sum();
+    // Covered area cannot be zero
+    // because area of rectangles are not zero.
+    unsafe { NonZeroUsize::new_unchecked(area) }
 }
 
 /// Return the total area obscured in a set of rectangles.
@@ -241,8 +271,11 @@ pub fn obscured_area(rects: &[Rect]) -> usize {
                     .collect_vec()
             })
             .collect_vec();
-        overlaps.iter().map(|x| covered_area(x)).sum::<usize>()
-            - covered_area(&overlaps.into_iter().flatten().collect_vec())
+        overlaps
+            .iter()
+            .map(|x| covered_area(x).get())
+            .sum::<usize>()
+            - covered_area(&overlaps.into_iter().flatten().collect_vec()).get()
     }
 }
 

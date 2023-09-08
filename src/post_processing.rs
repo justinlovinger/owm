@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use itertools::Itertools;
 use ndarray::prelude::*;
 
@@ -5,8 +7,12 @@ use crate::rect::{RangeExclusive, Rect, Size};
 
 pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
     for rect in rects.iter_mut() {
-        rect.size.width = rect.width().min(container.width - rect.x());
-        rect.size.height = rect.height().min(container.height - rect.y());
+        rect.size.width =
+            NonZeroUsize::new(rect.width().get().min(container.width.get() - rect.x()))
+                .unwrap_or(unsafe { NonZeroUsize::new_unchecked(1) });
+        rect.size.height =
+            NonZeroUsize::new(rect.height().get().min(container.height.get() - rect.y()))
+                .unwrap_or(unsafe { NonZeroUsize::new_unchecked(1) });
     }
 }
 
@@ -25,9 +31,9 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
         .iter()
         .map(|rect| Freedoms {
             left: rect.left(),
-            right: container.width.saturating_sub(rect.right()),
+            right: container.width.get().saturating_sub(rect.right()),
             top: rect.top(),
-            bottom: container.height.saturating_sub(rect.bottom()),
+            bottom: container.height.get().saturating_sub(rect.bottom()),
         })
         .collect_vec();
     loop {
@@ -42,7 +48,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
             .zip(freedoms.iter())
             .map(|(rect, freedoms)| {
                 let y_range = rect.y_range_exclusive();
-                let max_free = max_size.width.saturating_sub(rect.width());
+                let max_free = max_size.width.get().saturating_sub(rect.width().get());
                 let left = if freedoms.left == 0 {
                     rect.left()
                 } else {
@@ -68,7 +74,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
                         })
                         .map(|other| other.left())
                         .min()
-                        .unwrap_or(container.width)
+                        .unwrap_or(container.width.get())
                         .min(rect.right() + max_free)
                 };
                 RangeExclusive(left, right)
@@ -79,7 +85,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
             .zip(freedoms.iter())
             .map(|(rect, freedoms)| {
                 let x_range = rect.x_range_exclusive();
-                let max_free = max_size.height.saturating_sub(rect.height());
+                let max_free = max_size.height.get().saturating_sub(rect.height().get());
                 let top = if freedoms.top == 0 {
                     rect.top()
                 } else {
@@ -105,7 +111,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
                         })
                         .map(|other| other.top())
                         .min()
-                        .unwrap_or(container.height)
+                        .unwrap_or(container.height.get())
                         .min(rect.bottom() + max_free)
                 };
                 RangeExclusive(top, bottom)
@@ -114,16 +120,16 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
 
         for (rect, freedoms) in rects.iter().zip(freedoms.iter_mut()) {
             let (left, right) = flip_flop(
-                max_size.width.saturating_sub(rect.width()),
+                max_size.width.get().saturating_sub(rect.width().get()),
                 rect.left(),
-                container.width.saturating_sub(rect.right()),
+                container.width.get().saturating_sub(rect.right()),
             );
             freedoms.left = left;
             freedoms.right = right;
             let (top, bottom) = flip_flop(
-                max_size.height.saturating_sub(rect.height()),
+                max_size.height.get().saturating_sub(rect.height().get()),
                 rect.top(),
-                container.height.saturating_sub(rect.bottom()),
+                container.height.get().saturating_sub(rect.bottom()),
             );
             freedoms.top = top;
             freedoms.bottom = bottom;
@@ -359,7 +365,7 @@ pub fn overlap_borders(border_thickness: usize, container: Size, mut rects: Arra
             }
             None => {
                 rect.expand_right(
-                    border_thickness.min(container.width.saturating_sub(rect.right())),
+                    border_thickness.min(container.width.get().saturating_sub(rect.right())),
                 );
             }
         }
@@ -385,7 +391,7 @@ pub fn overlap_borders(border_thickness: usize, container: Size, mut rects: Arra
             }
             None => {
                 rect.expand_bottom(
-                    border_thickness.min(container.height.saturating_sub(rect.bottom())),
+                    border_thickness.min(container.height.get().saturating_sub(rect.bottom())),
                 );
             }
         }
@@ -430,19 +436,19 @@ mod tests {
 
     #[test]
     fn remove_gaps_expands_at_same_rate() {
-        let container = Size::new(10, 10);
+        let container = Size::new_checked(10, 10);
         let mut rects = arr1(&[
-            Rect::new(2, 2, 6, 1),
-            Rect::new(2, 7, 1, 1),
-            Rect::new(7, 7, 1, 1),
+            Rect::new_checked(2, 2, 6, 1),
+            Rect::new_checked(2, 7, 1, 1),
+            Rect::new_checked(7, 7, 1, 1),
         ]);
         remove_gaps(container, container, rects.view_mut());
         assert_eq!(
             rects,
             arr1(&[
-                Rect::new(0, 0, 10, 5),
-                Rect::new(0, 5, 5, 5),
-                Rect::new(5, 5, 5, 5),
+                Rect::new_checked(0, 0, 10, 5),
+                Rect::new_checked(0, 5, 5, 5),
+                Rect::new_checked(5, 5, 5, 5),
             ]),
         )
     }
@@ -479,8 +485,8 @@ mod tests {
         let mut rects = Array::from(args.rects);
         remove_gaps(args.container, args.container, rects.view_mut());
         prop_assert_eq!(
-            rects.into_iter().map(|x| x.area()).sum::<usize>(),
-            args.container.area()
+            rects.into_iter().map(|x| x.area().get()).sum::<usize>(),
+            args.container.area().get()
         )
     }
 
@@ -516,38 +522,38 @@ mod tests {
 
     #[test]
     fn overlap_borders_expands_evenly() {
-        let container = Size::new(10, 10);
+        let container = Size::new_checked(10, 10);
         let mut rects = arr1(&[
-            Rect::new(0, 0, 10, 5),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(5, 5, 5, 5),
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(5, 5, 5, 5),
         ]);
         overlap_borders(2, container, rects.view_mut());
         assert_eq!(
             rects,
             arr1(&[
-                Rect::new(0, 0, 10, 6),
-                Rect::new(0, 4, 6, 6),
-                Rect::new(4, 4, 6, 6),
+                Rect::new_checked(0, 0, 10, 6),
+                Rect::new_checked(0, 4, 6, 6),
+                Rect::new_checked(4, 4, 6, 6),
             ]),
         )
     }
 
     #[test]
     fn overlap_borders_breaks_ties_in_favor_of_first() {
-        let container = Size::new(10, 10);
+        let container = Size::new_checked(10, 10);
         let mut rects = arr1(&[
-            Rect::new(0, 0, 10, 5),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(5, 5, 5, 5),
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(5, 5, 5, 5),
         ]);
         overlap_borders(1, container, rects.view_mut());
         assert_eq!(
             rects,
             arr1(&[
-                Rect::new(0, 0, 10, 6),
-                Rect::new(0, 5, 6, 5),
-                Rect::new(5, 5, 5, 5),
+                Rect::new_checked(0, 0, 10, 6),
+                Rect::new_checked(0, 5, 6, 5),
+                Rect::new_checked(5, 5, 5, 5),
             ]),
         )
     }
@@ -581,12 +587,12 @@ mod tests {
                 .prop_flat_map(|x| {
                     (
                         (
-                            x.rects.iter().map(|x| x.width()).max().unwrap_or(0)
-                                ..=x.container.width,
-                            x.rects.iter().map(|x| x.height()).max().unwrap_or(0)
-                                ..=x.container.height,
+                            x.rects.iter().map(|x| x.width().get()).max().unwrap_or(1)
+                                ..=x.container.width.get(),
+                            x.rects.iter().map(|x| x.height().get()).max().unwrap_or(1)
+                                ..=x.container.height.get(),
                         )
-                            .prop_map(|(width, height)| Size::new(width, height)),
+                            .prop_map(|(width, height)| Size::new_checked(width, height)),
                         Just(x),
                     )
                 })

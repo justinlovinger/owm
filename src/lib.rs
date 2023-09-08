@@ -8,6 +8,8 @@ mod rect;
 #[cfg(test)]
 mod testing;
 
+use std::num::NonZeroUsize;
+
 use encoding::Decoder;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 use post_processing::overlap_borders;
@@ -23,10 +25,10 @@ pub use crate::{
 
 #[derive(Clone, Debug)]
 pub struct LayoutGen {
-    min_width: usize,
-    min_height: usize,
-    max_width: Option<usize>,
-    max_height: Option<usize>,
+    min_width: NonZeroUsize,
+    min_height: NonZeroUsize,
+    max_width: Option<NonZeroUsize>,
+    max_height: Option<NonZeroUsize>,
     overlap_borders_by: usize,
     weights: Weights,
     area_ratios: Vec<AreaRatio>,
@@ -36,10 +38,10 @@ pub struct LayoutGen {
 impl LayoutGen {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        min_width: usize,
-        min_height: usize,
-        max_width: Option<usize>,
-        max_height: Option<usize>,
+        min_width: NonZeroUsize,
+        min_height: NonZeroUsize,
+        max_width: Option<NonZeroUsize>,
+        max_height: Option<NonZeroUsize>,
         overlap_borders_by: usize,
         weights: Weights,
         area_ratios: Vec<AreaRatio>,

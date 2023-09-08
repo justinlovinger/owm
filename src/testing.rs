@@ -24,10 +24,17 @@ impl Arbitrary for ContainedRects {
         (Size::arbitrary(), range.0..=range.1)
             .prop_flat_map(|(container, count)| {
                 vec(
-                    (0..container.width, 0..container.height).prop_flat_map(move |(x, y)| {
-                        (1..=container.width - x, 1..=container.height - y)
-                            .prop_map(move |(width, height)| Rect::new(x, y, width, height))
-                    }),
+                    (0..container.width.get(), 0..container.height.get()).prop_flat_map(
+                        move |(x, y)| {
+                            (
+                                1..=container.width.get() - x,
+                                1..=container.height.get() - y,
+                            )
+                                .prop_map(move |(width, height)| {
+                                    Rect::new_checked(x, y, width, height)
+                                })
+                        },
+                    ),
                     count,
                 )
                 .prop_map(move |rects| ContainedRects { container, rects })
@@ -42,7 +49,7 @@ impl Arbitrary for Size {
 
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         (1_usize..=5120, 1_usize..=2160)
-            .prop_map(|(width, height)| Size { width, height })
+            .prop_map(|(width, height)| Size::new_checked(width, height))
             .boxed()
     }
 }

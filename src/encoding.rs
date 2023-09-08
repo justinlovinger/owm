@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{num::NonZeroUsize, ops::Range};
 
 use ndarray::prelude::*;
 
@@ -25,15 +25,15 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn new(min_size: Size, max_size: Size, container: Size, count: usize) -> Self {
-        debug_assert!(min_size.width <= max_size.width);
-        debug_assert!(min_size.height <= max_size.height);
+        debug_assert!(min_size.width < max_size.width);
+        debug_assert!(min_size.height < max_size.height);
         debug_assert!(max_size.width <= container.width);
         debug_assert!(max_size.height <= container.height);
 
-        let x_max = container.width.saturating_sub(min_size.width);
-        let y_max = container.height.saturating_sub(min_size.height);
-        let width_range = min_size.width..=max_size.width;
-        let height_range = min_size.height..=max_size.height;
+        let x_max = container.width.get().saturating_sub(min_size.width.get());
+        let y_max = container.height.get().saturating_sub(min_size.height.get());
+        let width_range = min_size.width.get()..=max_size.width.get();
+        let height_range = min_size.height.get()..=max_size.height.get();
         let bits_per_x = bits_for(x_max);
         let bits_per_y = bits_for(y_max);
         let bits_per_width = bits_for(width_range.end() - width_range.start());
@@ -84,6 +84,16 @@ impl Decoder {
             ))
             .unwrap()
             .map_axis(Axis(2), |xs| {
+                let width = self.width_decoder.decode(
+                    xs.slice(s![self.width_bits_range.clone()])
+                        .into_iter()
+                        .copied(),
+                ) as usize;
+                let height = self.height_decoder.decode(
+                    xs.slice(s![self.height_bits_range.clone()])
+                        .into_iter()
+                        .copied(),
+                ) as usize;
                 Rect::new(
                     self.x_decoder
                         .decode(xs.slice(s![self.x_bits_range.clone()]).into_iter().copied())
@@ -91,16 +101,9 @@ impl Decoder {
                     self.y_decoder
                         .decode(xs.slice(s![self.y_bits_range.clone()]).into_iter().copied())
                         as usize,
-                    self.width_decoder.decode(
-                        xs.slice(s![self.width_bits_range.clone()])
-                            .into_iter()
-                            .copied(),
-                    ) as usize,
-                    self.height_decoder.decode(
-                        xs.slice(s![self.height_bits_range.clone()])
-                            .into_iter()
-                            .copied(),
-                    ) as usize,
+                    // The decoder should ensure these invariants.
+                    unsafe { NonZeroUsize::new_unchecked(width) },
+                    unsafe { NonZeroUsize::new_unchecked(height) },
                 )
             });
         for mut rects in rects.axis_iter_mut(Axis(0)) {

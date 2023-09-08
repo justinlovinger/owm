@@ -1,4 +1,8 @@
-use std::{iter::repeat, ops::Mul};
+use std::{
+    iter::{once, repeat},
+    num::NonZeroUsize,
+    ops::Mul,
+};
 
 use derive_more::Display;
 use itertools::Itertools;
@@ -107,7 +111,7 @@ impl Problem {
 }
 
 struct MinimizeGaps {
-    area: usize,
+    area: NonZeroUsize,
     worst_case: f64,
 }
 
@@ -115,7 +119,7 @@ impl MinimizeGaps {
     fn new(container: Size) -> Self {
         Self {
             area: container.area(),
-            worst_case: container.area() as f64,
+            worst_case: (container.area().get() - 1) as f64,
         }
     }
 
@@ -124,7 +128,10 @@ impl MinimizeGaps {
             1.0
         } else {
             // This assumes rectangles do not exceed container bounds.
-            (self.area - covered_area(rects)) as f64 / self.worst_case
+            // Worst case can theoretically be zero,
+            // if `container.area()` is `1`,
+            // but this is unrealistic in practice.
+            (self.area.get() - covered_area(rects).get()) as f64 / self.worst_case
         }
     }
 }
@@ -136,7 +143,7 @@ struct MinimizeOverlap {
 impl MinimizeOverlap {
     fn new(container: Size, count: usize) -> Self {
         Self {
-            worst_case: (count.saturating_sub(1) * container.area()) as f64,
+            worst_case: (count.saturating_sub(1) * container.area().get()) as f64,
         }
     }
 
@@ -177,27 +184,19 @@ impl Mul<f64> for AreaRatio {
 
 impl MaintainAreaRatios {
     fn new(ratios: Vec<AreaRatio>, max_size: Size, count: usize) -> Self {
-        let worst_case = match ratios
-            .iter()
-            .take(count.saturating_sub(1))
-            .max_by(|x, y| x.partial_cmp(y).unwrap())
-            .copied()
-        {
-            Some(max_ratio) => {
-                // One pair can be `max_size.area()` apart in area,
-                // but then remaining pairs can only be equal at worst.
-                let area = max_size.area() as f64;
-                max_ratio * area
-                    + ratios
-                        .iter()
-                        .filter(|x| x != &&max_ratio)
-                        .chain(repeat(ratios.last().unwrap()))
-                        .take(count.saturating_sub(2))
-                        .copied()
-                        .map(|x| (x.0 - 1.0) * area)
-                        .sum::<f64>()
-            }
-            None => 0.0,
+        let worst_case = if !ratios.is_empty() && count > 1 {
+            Self::_evaluate(
+                ratios
+                    .iter()
+                    .sorted_unstable_by(|x, y| y.partial_cmp(x).unwrap())
+                    .chain(repeat(ratios.last().unwrap()))
+                    .copied(),
+                once(unsafe { NonZeroUsize::new_unchecked(1) })
+                    .chain(repeat(max_size.area()))
+                    .take(count),
+            )
+        } else {
+            0.0
         };
         Self { ratios, worst_case }
     }
@@ -206,26 +205,32 @@ impl MaintainAreaRatios {
         if self.worst_case == 0.0 {
             0.0
         } else {
-            rects
-                .iter()
-                .map(|x| x.area() as f64)
-                .tuple_windows()
-                .zip(
-                    self.ratios
-                        .iter()
-                        .chain(repeat(self.ratios.last().unwrap()))
-                        .copied(),
-                )
-                // Use `.abs()` instead of `.max(0.0)`
-                // to encourage later to grow
-                // when possible.
-                // Otherwise,
-                // the last rectangle can always be small
-                // with no penalty.
-                .map(|((x, y), ratio)| (ratio * y - x).abs())
-                .sum::<f64>()
-                / self.worst_case
+            Self::_evaluate(
+                self.ratios
+                    .iter()
+                    .chain(repeat(self.ratios.last().unwrap()))
+                    .copied(),
+                rects.iter().map(|x| x.area()),
+            ) / self.worst_case
         }
+    }
+
+    fn _evaluate(
+        ratios: impl Iterator<Item = AreaRatio>,
+        areas: impl Iterator<Item = NonZeroUsize>,
+    ) -> f64 {
+        areas
+            .map(|x| x.get() as f64)
+            .tuple_windows()
+            .zip(ratios)
+            // Use `.abs()` instead of `.max(0.0)`
+            // to encourage later to grow
+            // when possible.
+            // Otherwise,
+            // the last rectangle can always be small
+            // with no penalty.
+            .map(|((x, y), ratio)| (ratio * y - x).abs())
+            .sum::<f64>()
     }
 }
 
@@ -255,8 +260,8 @@ impl MaintainAspectRatios {
                 .iter()
                 .chain(repeat(ratios.last().unwrap()))
                 .map(|ratio| {
-                    (abs_ratio(max_size.width as f64 / ratio.0))
-                        .max(abs_ratio((1.0 / max_size.height as f64) / ratio.0))
+                    (abs_ratio(max_size.width.get() as f64 / ratio.0))
+                        .max(abs_ratio((1.0 / max_size.height.get() as f64) / ratio.0))
                         - 1.0
                 })
                 .take(count)
@@ -280,7 +285,8 @@ impl MaintainAspectRatios {
                         .copied(),
                 )
                 .map(|(x, ratio)| {
-                    abs_ratio((x.size.width as f64 / x.size.height as f64) / ratio.0) - 1.0
+                    abs_ratio((x.size.width.get() as f64 / x.size.height.get() as f64) / ratio.0)
+                        - 1.0
                 })
                 .sum::<f64>()
                 / self.worst_case
@@ -303,7 +309,13 @@ struct PlaceAdjacentClose {
 impl PlaceAdjacentClose {
     fn new(container: Size, count: usize) -> Self {
         Self {
-            worst_case: (count.saturating_sub(1) * (Pos::new(0, 0)).dist(container.into())) as f64,
+            // This assumes rectangles cannot exceed container bounds.
+            // `container.width.get()` is not `- 1`
+            // because we only compare *some* corners.
+            worst_case: (count.saturating_sub(1)
+                * (Pos::new(1, 1))
+                    .dist(Pos::new(container.width.get(), container.height.get() - 1)))
+                as f64,
         }
     }
 
@@ -367,13 +379,12 @@ struct CenterMain {
 
 impl CenterMain {
     fn new(container: Size) -> Self {
-        let center = Pos::new(container.width / 2, container.height / 2);
+        let center = Pos::new(container.width.get() / 2, container.height.get() / 2);
         Self {
             center,
             worst_case: center
                 .dist(Pos::new(0, 0))
-                .max(center.dist(Pos::new(container.width, container.height)))
-                as f64,
+                .max(center.dist(container.into())) as f64,
         }
     }
 
@@ -406,23 +417,24 @@ mod tests {
         container: Size,
         #[strategy((0_usize..=16))] count: usize,
     ) {
+        prop_assume!(container.width.get() > 1 || container.height.get() > 1);
         prop_assert_eq!(
-            MinimizeGaps::new(container)
-                .evaluate(&repeat(Rect::new(0, 0, 0, 0)).take(count).collect_vec()),
+            MinimizeGaps::new(container).evaluate(
+                &repeat(Rect::new_checked(0, 0, 1, 1))
+                    .take(count)
+                    .collect_vec()
+            ),
             1.0
         )
     }
 
     #[test]
     fn minimize_gaps_returns_0_for_best_case_without_overlap() {
-        let container = Size {
-            width: 10,
-            height: 10,
-        };
+        let container = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 10, 5),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(5, 5, 5, 5),
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(5, 5, 5, 5),
         ];
         assert_eq!(MinimizeGaps::new(container).evaluate(&rects), 0.0)
     }
@@ -477,14 +489,11 @@ mod tests {
 
     #[test]
     fn minimize_overlap_returns_0_for_best_case() {
-        let container = Size {
-            width: 10,
-            height: 10,
-        };
+        let container = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 10, 5),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(5, 5, 5, 5),
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(5, 5, 5, 5),
         ];
         assert_eq!(
             MinimizeOverlap::new(container, rects.len()).evaluate(&rects),
@@ -520,14 +529,11 @@ mod tests {
         // However,
         // then the middle rectangle has a good area
         // for its position.
-        let max_size = Size {
-            width: 10,
-            height: 10,
-        };
+        let max_size = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 0, 0),
-            Rect::new(0, 0, 10, 10),
-            Rect::new(0, 0, 10, 10),
+            Rect::new_checked(0, 0, 1, 1),
+            Rect::new_checked(0, 0, 10, 10),
+            Rect::new_checked(0, 0, 10, 10),
         ];
         assert_eq!(
             MaintainAreaRatios::new(vec![AreaRatio(2.0)], max_size, rects.len()).evaluate(&rects),
@@ -537,14 +543,11 @@ mod tests {
 
     #[test]
     fn maintain_area_ratios_returns_0_for_best_case() {
-        let max_size = Size {
-            width: 10,
-            height: 10,
-        };
+        let max_size = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 10, 10),
-            Rect::new(0, 0, 10, 5),
-            Rect::new(0, 0, 5, 5),
+            Rect::new_checked(0, 0, 10, 10),
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 0, 5, 5),
         ];
         assert_eq!(
             MaintainAreaRatios::new(vec![AreaRatio(2.0)], max_size, rects.len()).evaluate(&rects),
@@ -572,11 +575,11 @@ mod tests {
 
     #[test]
     fn maintain_aspect_ratios_returns_1_for_worst_case() {
-        let max_size = Size {
-            width: 10,
-            height: 10,
-        };
-        let rects = [Rect::new(0, 0, 1, 10), Rect::new(0, 0, 10, 1)];
+        let max_size = Size::new_checked(10, 10);
+        let rects = [
+            Rect::new_checked(0, 0, 1, 10),
+            Rect::new_checked(0, 0, 10, 1),
+        ];
         assert_eq!(
             MaintainAspectRatios::new(
                 vec![AspectRatio(2.0), AspectRatio(0.5)],
@@ -590,11 +593,11 @@ mod tests {
 
     #[test]
     fn maintain_aspect_ratios_returns_0_for_best_case() {
-        let max_size = Size {
-            width: 10,
-            height: 10,
-        };
-        let rects = [Rect::new(0, 0, 10, 5), Rect::new(0, 0, 5, 10)];
+        let max_size = Size::new_checked(10, 10);
+        let rects = [
+            Rect::new_checked(0, 0, 10, 5),
+            Rect::new_checked(0, 0, 5, 10),
+        ];
         assert_eq!(
             MaintainAspectRatios::new(
                 vec![AspectRatio(2.0), AspectRatio(0.5)],
@@ -614,15 +617,12 @@ mod tests {
 
     #[test]
     fn place_adjacent_close_returns_1_for_worst_case() {
-        // Worst case is rectangles with zero size alternating opposite corners.
-        let container = Size {
-            width: 10,
-            height: 10,
-        };
+        // Worst case is rectangles with min size alternating opposite corners.
+        let container = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 0, 0),
-            Rect::new(10, 10, 0, 0),
-            Rect::new(0, 0, 0, 0),
+            Rect::new_checked(0, 0, 1, 1),
+            Rect::new_checked(9, 9, 1, 1),
+            Rect::new_checked(0, 0, 1, 1),
         ];
         assert_eq!(
             PlaceAdjacentClose::new(container, rects.len()).evaluate(&rects),
@@ -632,14 +632,11 @@ mod tests {
 
     #[test]
     fn place_adjacent_close_returns_0_for_best_case() {
-        let container = Size {
-            width: 10,
-            height: 10,
-        };
+        let container = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 5, 5),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(5, 5, 5, 5),
+            Rect::new_checked(0, 0, 5, 5),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(5, 5, 5, 5),
         ];
         assert_eq!(
             PlaceAdjacentClose::new(container, rects.len()).evaluate(&rects),
@@ -657,15 +654,15 @@ mod tests {
     #[test]
     fn place_in_reading_order_returns_1_for_worst_case() {
         let rects = [
-            Rect::new(2, 0, 0, 0),
-            Rect::new(1, 0, 0, 0),
-            Rect::new(0, 0, 0, 0),
+            Rect::new_checked(2, 0, 1, 1),
+            Rect::new_checked(1, 0, 1, 1),
+            Rect::new_checked(0, 0, 1, 1),
         ];
         assert_eq!(PlaceInReadingOrder::new(rects.len()).evaluate(&rects), 1.0);
         let rects = [
-            Rect::new(0, 2, 0, 0),
-            Rect::new(0, 1, 0, 0),
-            Rect::new(0, 0, 0, 0),
+            Rect::new_checked(0, 2, 1, 1),
+            Rect::new_checked(0, 1, 1, 1),
+            Rect::new_checked(0, 0, 1, 1),
         ];
         assert_eq!(PlaceInReadingOrder::new(rects.len()).evaluate(&rects), 1.0);
     }
@@ -673,15 +670,15 @@ mod tests {
     #[test]
     fn place_in_reading_order_returns_0_for_best_case() {
         let rects = [
-            Rect::new(0, 0, 0, 0),
-            Rect::new(1, 0, 0, 0),
-            Rect::new(2, 0, 0, 0),
+            Rect::new_checked(0, 0, 1, 1),
+            Rect::new_checked(1, 0, 1, 1),
+            Rect::new_checked(2, 0, 1, 1),
         ];
         assert_eq!(PlaceInReadingOrder::new(rects.len()).evaluate(&rects), 0.0);
         let rects = [
-            Rect::new(0, 0, 0, 0),
-            Rect::new(0, 1, 0, 0),
-            Rect::new(0, 2, 0, 0),
+            Rect::new_checked(0, 0, 1, 1),
+            Rect::new_checked(0, 1, 1, 1),
+            Rect::new_checked(0, 2, 1, 1),
         ];
         assert_eq!(PlaceInReadingOrder::new(rects.len()).evaluate(&rects), 0.0);
     }
@@ -693,28 +690,22 @@ mod tests {
 
     #[test]
     fn center_main_returns_1_for_worst_case() {
-        let container = Size {
-            width: 10,
-            height: 10,
-        };
+        let container = Size::new_checked(10, 10);
         let rects = [
-            Rect::new(0, 0, 0, 0),
-            Rect::new(0, 5, 5, 5),
-            Rect::new(0, 0, 10, 10),
+            Rect::new_checked(0, 0, 1, 1),
+            Rect::new_checked(0, 5, 5, 5),
+            Rect::new_checked(0, 0, 10, 10),
         ];
         assert_eq!(CenterMain::new(container).evaluate(&rects), 1.0)
     }
 
     #[test]
     fn center_main_returns_0_for_centered_main() {
-        let container = Size {
-            width: 12,
-            height: 12,
-        };
+        let container = Size::new_checked(12, 12);
         let rects = [
-            Rect::new(3, 3, 6, 6),
-            Rect::new(0, 0, 12, 12),
-            Rect::new(0, 5, 5, 5),
+            Rect::new_checked(3, 3, 6, 6),
+            Rect::new_checked(0, 0, 12, 12),
+            Rect::new_checked(0, 5, 5, 5),
         ];
         assert_eq!(CenterMain::new(container).evaluate(&rects), 0.0)
     }

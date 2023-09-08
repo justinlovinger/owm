@@ -121,10 +121,10 @@ fn main() {
     let args = Args::parse();
 
     let mut layout_manager = LayoutManager::new(LayoutGen::new(
-        args.min_width.into(),
-        args.min_height.into(),
-        args.max_width.map(|x| x.into()),
-        args.max_height.map(|x| x.into()),
+        args.min_width,
+        args.min_height,
+        args.max_width,
+        args.max_height,
         args.overlap_borders_by,
         Weights {
             gaps_weight: args.gaps_weight,
@@ -279,7 +279,10 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 static STARTED: Lazy<Mutex<HashSet<Key>>> =
                     Lazy::new(|| Mutex::new(HashSet::new()));
 
-                let container = Size::new(usable_width as usize, usable_height as usize);
+                let container = Size::new(
+                    NonZeroUsize::new(usable_width as usize).expect("width should be non-zero"),
+                    NonZeroUsize::new(usable_height as usize).expect("height should be non-zero"),
+                );
                 let view_count = view_count as usize;
                 let key = (container, view_count);
 
@@ -289,8 +292,8 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                             proxy.push_view_dimensions(
                                 rect.x() as i32,
                                 rect.y() as i32,
-                                rect.width() as u32,
-                                rect.height() as u32,
+                                rect.width().get() as u32,
+                                rect.height().get() as u32,
                                 serial,
                             );
                         }
