@@ -28,6 +28,15 @@ use crate::protocol::{
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    /// River namespace for this instance of the layout generator.
+    /// Multiple instances can run simultaneously
+    /// using different namespaces.
+    /// Instances can be switched between
+    /// using `riverctl default-layout NAMESPACE`
+    /// or `riverctl output-layout NAMESPACE`.
+    #[arg(long, value_name = "NAMESPACE", default_value = "owm")]
+    namespace: String,
+
     #[arg(long, value_name = "NON_ZERO_UINT", default_value_t = NonZeroUsize::new(320).unwrap())]
     min_width: NonZeroUsize,
 
@@ -132,24 +141,27 @@ fn main() {
         }
     }
 
-    let mut layout_manager = LayoutManager::new(LayoutGen::new(
-        args.min_width,
-        args.min_height,
-        args.max_width,
-        args.max_height,
-        args.overlap_borders_by,
-        Weights {
-            gaps_weight: args.gaps_weight,
-            overlap_weight: args.overlap_weight,
-            area_ratios_weight: args.area_ratios_weight,
-            aspect_ratios_weight: args.aspect_ratios_weight,
-            adjacent_close_weight: args.adjacent_close_weight,
-            reading_order_weight: args.reading_order_weight,
-            center_main_weight: args.center_main_weight,
-        },
-        args.area_ratios,
-        args.aspect_ratios,
-    ));
+    let mut layout_manager = LayoutManager::new(
+        args.namespace,
+        LayoutGen::new(
+            args.min_width,
+            args.min_height,
+            args.max_width,
+            args.max_height,
+            args.overlap_borders_by,
+            Weights {
+                gaps_weight: args.gaps_weight,
+                overlap_weight: args.overlap_weight,
+                area_ratios_weight: args.area_ratios_weight,
+                aspect_ratios_weight: args.aspect_ratios_weight,
+                adjacent_close_weight: args.adjacent_close_weight,
+                reading_order_weight: args.reading_order_weight,
+                center_main_weight: args.center_main_weight,
+            },
+            args.area_ratios,
+            args.aspect_ratios,
+        ),
+    );
 
     let conn = Connection::connect_to_env().unwrap();
     let mut event_queue = conn.new_event_queue();
@@ -171,6 +183,7 @@ impl OutputId {
 }
 
 pub struct LayoutManager {
+    namespace: String,
     gen: LayoutGen,
     // These will be initialized
     // by Wayland events.
@@ -180,8 +193,9 @@ pub struct LayoutManager {
 }
 
 impl LayoutManager {
-    pub fn new(gen: LayoutGen) -> Self {
+    pub fn new(namespace: String, gen: LayoutGen) -> Self {
         Self {
+            namespace,
             gen,
             seat: None,
             manager: None,
@@ -263,7 +277,12 @@ impl Dispatch<WlOutput, ()> for LayoutManager {
                 .manager
                 .as_ref()
                 .expect("compositor should support `river_layout_v3`")
-                .get_layout(output, String::from("owm"), qhandle, OutputId::new(output));
+                .get_layout(
+                    output,
+                    state.namespace.clone(),
+                    qhandle,
+                    OutputId::new(output),
+                );
         }
     }
 }
@@ -343,7 +362,10 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 }
             }
             river_layout_v3::Event::NamespaceInUse => {
-                panic!("namespace in use: layout program may already be running");
+                panic!(
+                    "namespace '{}' in use: layout program may already be running",
+                    state.namespace
+                );
             }
             _ => {}
         }
