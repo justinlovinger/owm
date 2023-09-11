@@ -77,11 +77,7 @@ impl Decoder {
 
     pub fn decode2(&self, bits: ArrayView2<bool>) -> Array2<Rect> {
         let mut rects = bits
-            .into_shape((
-                bits.nrows(),
-                bits.ncols() / self.bits_per_rect(),
-                self.bits_per_rect(),
-            ))
+            .into_shape((bits.nrows(), self.count, self.bits_per_rect()))
             .unwrap()
             .map_axis(Axis(2), |xs| {
                 let width = self.width_decoder.decode(
