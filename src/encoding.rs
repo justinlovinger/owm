@@ -25,8 +25,8 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn new(min_size: Size, max_size: Size, container: Size, count: usize) -> Self {
-        debug_assert!(min_size.width < max_size.width);
-        debug_assert!(min_size.height < max_size.height);
+        debug_assert!(min_size.width <= max_size.width);
+        debug_assert!(min_size.height <= max_size.height);
         debug_assert!(max_size.width <= container.width);
         debug_assert!(max_size.height <= container.height);
 

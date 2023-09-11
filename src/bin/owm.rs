@@ -119,6 +119,18 @@ where
 
 fn main() {
     let args = Args::parse();
+    if let Some(max_width) = args.max_width {
+        if args.min_width > max_width {
+            eprintln!("error: invalid value '{}' for '--min-width <NON_ZERO_UINT>': must be <= value '{max_width}' for '--max-width <NON_ZERO_UINT>'", args.min_width);
+            std::process::exit(1);
+        }
+    }
+    if let Some(max_height) = args.max_height {
+        if args.min_height > max_height {
+            eprintln!("error: invalid value '{}' for '--min-height <NON_ZERO_UINT>': must be <= value '{max_height}' for '--max-height <NON_ZERO_UINT>'", args.min_height);
+            std::process::exit(1);
+        }
+    }
 
     let mut layout_manager = LayoutManager::new(LayoutGen::new(
         args.min_width,
