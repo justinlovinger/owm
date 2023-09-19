@@ -34,10 +34,10 @@ impl Decoder {
         let y_max = container.height.get().saturating_sub(min_size.height.get());
         let width_range = min_size.width.get()..=max_size.width.get();
         let height_range = min_size.height.get()..=max_size.height.get();
-        let bits_per_x = bits_for(x_max);
-        let bits_per_y = bits_for(y_max);
-        let bits_per_width = bits_for(width_range.end() - width_range.start());
-        let bits_per_height = bits_for(height_range.end() - height_range.start());
+        let bits_per_x = reduced_bits_for(x_max);
+        let bits_per_y = reduced_bits_for(y_max);
+        let bits_per_width = reduced_bits_for(width_range.end() - width_range.start());
+        let bits_per_height = reduced_bits_for(height_range.end() - height_range.start());
         Self {
             max_size,
             container,
@@ -108,6 +108,13 @@ impl Decoder {
         }
         rects
     }
+}
+
+fn reduced_bits_for(x: usize) -> usize {
+    // 128 was empirically chosen.
+    // It has no special meaning,
+    // other than being a power of 2.
+    bits_for((x as f64 / 128.0).ceil() as usize)
 }
 
 fn bits_for(x: usize) -> usize {
