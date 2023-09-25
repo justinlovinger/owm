@@ -29,6 +29,7 @@ pub use crate::{
     rect::{Pos, Rect, Size},
 };
 
+#[derive(Debug)]
 pub struct LayoutGen {
     inner: Arc<RawLayoutGen>,
     cache: HashMap<Key, Arc<OnceCell<Vec<Rect>>>>,
@@ -95,18 +96,40 @@ impl LayoutGen {
     where
         F: FnOnce(&[Rect]) + Send + 'static,
     {
+        self._layout(container, count, Box::new(callback))
+    }
+
+    // `Box` avoids infinite recusion during compilation.
+    #[allow(clippy::type_complexity)]
+    fn _layout(
+        &mut self,
+        container: Size,
+        count: usize,
+        callback: Box<dyn FnOnce(&[Rect]) + Send + 'static>,
+    ) {
+        if count == 0 {
+            return (callback)(&[]);
+        }
+
         let key = (container, count);
         match self.cache.entry(key) {
             Entry::Vacant(entry) => {
                 let cache_cell = Arc::clone(entry.insert(Arc::new(OnceCell::new())));
                 let gen = Arc::clone(&self.inner);
-                thread::spawn(move || {
-                    let layout = gen.layout(container, count);
-                    let layout = cache_cell
-                        .try_insert(layout)
-                        .expect("cell should be unset for {key:?}");
-                    (callback)(layout)
-                });
+                self.layout(
+                    container,
+                    count - 1,
+                    Box::new(move |prev_layout: &[Rect]| {
+                        let prev_layout = prev_layout.to_vec();
+                        thread::spawn(move || {
+                            let layout = gen.layout(container, prev_layout);
+                            let layout = cache_cell
+                                .try_insert(layout)
+                                .expect("cell should be unset for {key:?}");
+                            (callback)(layout)
+                        });
+                    }),
+                );
             }
             Entry::Occupied(entry) => {
                 let cache_cell = entry.get();
@@ -122,7 +145,8 @@ impl LayoutGen {
 }
 
 impl RawLayoutGen {
-    fn layout(&self, container: Size, count: usize) -> Vec<Rect> {
+    fn layout(&self, container: Size, prev_layout: Vec<Rect>) -> Vec<Rect> {
+        let count = prev_layout.len() + 1;
         let max_size = Size::new(
             self.max_width
                 .map_or(container.width, |x| x.min(container.width)),
@@ -144,7 +168,7 @@ impl RawLayoutGen {
             self.aspect_ratios.clone(),
             max_size,
             container,
-            count,
+            prev_layout,
         );
         let mut rects = decoder.decode1(
             UntilConvergedConfig {

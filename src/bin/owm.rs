@@ -104,6 +104,12 @@ struct Args {
     /// Importance of "center main" objective.
     #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.5).unwrap())]
     center_main_weight: Weight,
+
+    /// Importance of keeping layout consistent
+    /// from one number of windows
+    /// to the next.
+    #[arg(long, value_name = "WEIGHT", default_value_t = Weight::new(1.0).unwrap())]
+    consistency_weight: Weight,
 }
 
 fn non_zero_usize_option_parser(
@@ -154,6 +160,7 @@ fn main() {
                 adjacent_close_weight: args.adjacent_close_weight,
                 reading_order_weight: args.reading_order_weight,
                 center_main_weight: args.center_main_weight,
+                consistency_weight: args.consistency_weight,
             },
             args.area_ratios,
             args.aspect_ratios,

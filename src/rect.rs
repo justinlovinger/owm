@@ -165,6 +165,10 @@ impl Rect {
             None
         }
     }
+
+    pub fn diff(self, other: Self) -> usize {
+        self.pos.dist(other.pos) + self.size.diff(other.size)
+    }
 }
 
 impl Pos {
@@ -202,6 +206,10 @@ impl Size {
         // Area cannot be zero
         // if dimensions are not.
         unsafe { NonZeroUsize::new_unchecked(self.width.get() * self.height.get()) }
+    }
+
+    pub fn diff(self, other: Size) -> usize {
+        Pos::from(self).dist(other.into())
     }
 }
 

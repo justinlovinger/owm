@@ -1,3 +1,5 @@
+use std::{num::NonZeroUsize, ops::RangeInclusive};
+
 use proptest::prelude::{prop::collection::vec, *};
 
 use crate::{rect::RangeExclusive, Rect, Size};
@@ -8,36 +10,61 @@ pub struct ContainedRects {
     pub rects: Vec<Rect>,
 }
 
-pub struct NumRectsRange(pub usize, pub usize);
+pub struct ContainedRectsParams {
+    pub width_range: RangeInclusive<NonZeroUsize>,
+    pub height_range: RangeInclusive<NonZeroUsize>,
+    pub len_range: RangeInclusive<usize>,
+}
 
-impl Default for NumRectsRange {
+impl Default for ContainedRectsParams {
     fn default() -> Self {
-        Self(0, 16)
+        Self {
+            width_range: NonZeroUsize::new(1).unwrap()..=NonZeroUsize::new(5120).unwrap(),
+            height_range: NonZeroUsize::new(1).unwrap()..=NonZeroUsize::new(2160).unwrap(),
+            len_range: 0..=16,
+        }
+    }
+}
+
+impl ContainedRectsParams {
+    pub fn from_len_range(range: RangeInclusive<usize>) -> Self {
+        Self {
+            len_range: range,
+            ..Self::default()
+        }
+    }
+
+    fn width_range_usize(&self) -> RangeInclusive<usize> {
+        self.width_range.start().get()..=self.width_range.end().get()
+    }
+
+    fn height_range_usize(&self) -> RangeInclusive<usize> {
+        self.height_range.start().get()..=self.height_range.end().get()
     }
 }
 
 impl Arbitrary for ContainedRects {
-    type Parameters = NumRectsRange;
+    type Parameters = ContainedRectsParams;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(range: Self::Parameters) -> Self::Strategy {
-        (Size::arbitrary(), range.0..=range.1)
-            .prop_flat_map(|(container, count)| {
+    fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
+        (
+            params.width_range_usize(),
+            params.height_range_usize(),
+            params.len_range,
+        )
+            .prop_flat_map(|(width, height, count)| {
                 vec(
-                    (0..container.width.get(), 0..container.height.get()).prop_flat_map(
-                        move |(x, y)| {
-                            (
-                                1..=container.width.get() - x,
-                                1..=container.height.get() - y,
-                            )
-                                .prop_map(move |(width, height)| {
-                                    Rect::new_checked(x, y, width, height)
-                                })
-                        },
-                    ),
+                    (0..width, 0..height).prop_flat_map(move |(x, y)| {
+                        (1..=width - x, 1..=height - y)
+                            .prop_map(move |(width, height)| Rect::new_checked(x, y, width, height))
+                    }),
                     count,
                 )
-                .prop_map(move |rects| ContainedRects { container, rects })
+                .prop_map(move |rects| ContainedRects {
+                    container: Size::new_checked(width, height),
+                    rects,
+                })
             })
             .boxed()
     }

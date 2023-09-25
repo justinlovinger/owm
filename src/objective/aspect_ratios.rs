@@ -84,14 +84,14 @@ mod tests {
     use proptest::prelude::{prop::collection::vec, *};
     use test_strategy::proptest;
 
-    use crate::testing::{ContainedRects, NumRectsRange};
+    use crate::testing::ContainedRects;
 
     use super::*;
 
     #[proptest]
     fn maintain_aspect_ratios_returns_values_in_range_0_1(
         #[strategy(vec(f64::EPSILON..=100.0, 0..=16))] ratios: Vec<f64>,
-        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(0, 16)))] x: ContainedRects,
+        x: ContainedRects,
     ) {
         prop_assert!((0.0..=1.0).contains(
             &MaintainAspectRatios::new(

@@ -2,6 +2,7 @@ mod adjacent_close;
 mod area_ratios;
 mod aspect_ratios;
 mod center_main;
+mod consistency;
 mod gaps;
 mod overlap;
 mod reading_order;
@@ -18,8 +19,8 @@ use crate::{
 
 use self::{
     adjacent_close::PlaceAdjacentClose, area_ratios::MaintainAreaRatios,
-    aspect_ratios::MaintainAspectRatios, center_main::CenterMain, gaps::MinimizeGaps,
-    overlap::MinimizeOverlap, reading_order::PlaceInReadingOrder,
+    aspect_ratios::MaintainAspectRatios, center_main::CenterMain, consistency::MaximizeConsistency,
+    gaps::MinimizeGaps, overlap::MinimizeOverlap, reading_order::PlaceInReadingOrder,
 };
 pub use self::{area_ratios::AreaRatio, aspect_ratios::AspectRatio};
 
@@ -32,6 +33,7 @@ pub struct Problem {
     adjacent_close: PlaceAdjacentClose,
     reading_order: PlaceInReadingOrder,
     center_main: CenterMain,
+    consistency: MaximizeConsistency,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -43,6 +45,7 @@ pub struct Weights {
     pub adjacent_close_weight: Weight,
     pub reading_order_weight: Weight,
     pub center_main_weight: Weight,
+    pub consistency_weight: Weight,
 }
 
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd)]
@@ -73,8 +76,9 @@ impl Problem {
         aspect_ratios: Vec<AspectRatio>,
         max_size: Size,
         container: Size,
-        count: usize,
+        prev_layout: Vec<Rect>,
     ) -> Self {
+        let count = prev_layout.len() + 1;
         Self {
             weights,
             gaps: MinimizeGaps::new(container),
@@ -84,6 +88,7 @@ impl Problem {
             adjacent_close: PlaceAdjacentClose::new(container, count),
             reading_order: PlaceInReadingOrder::new(count),
             center_main: CenterMain::new(container),
+            consistency: MaximizeConsistency::new(container, prev_layout),
         }
     }
 
@@ -114,6 +119,10 @@ impl Problem {
             0.0
         }) + (if self.weights.center_main_weight > Weight(0.0) {
             self.weights.center_main_weight * self.center_main.evaluate(rects)
+        } else {
+            0.0
+        }) + (if self.weights.consistency_weight > Weight(0.0) {
+            self.weights.consistency_weight * self.consistency.evaluate(rects)
         } else {
             0.0
         })

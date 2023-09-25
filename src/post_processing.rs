@@ -429,7 +429,7 @@ mod tests {
 
     use crate::{
         rect::{covered_area, obscured_area},
-        testing::{ContainedRects, NumRectsRange},
+        testing::{ContainedRects, ContainedRectsParams},
     };
 
     use super::*;
@@ -465,7 +465,8 @@ mod tests {
     // ```
     #[proptest]
     fn remove_gaps_with_no_max_size_and_1_to_3_rects_covers_container(
-        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(1, 3)))] args: ContainedRects,
+        #[strategy(ContainedRects::arbitrary_with(ContainedRectsParams::from_len_range(1..=3)))]
+        args: ContainedRects,
     ) {
         let mut rects = Array::from(args.rects);
         remove_gaps(args.container, args.container, rects.view_mut());
@@ -479,7 +480,8 @@ mod tests {
     // See above comment about four or more rects.
     #[proptest(max_global_rejects = 65536)]
     fn remove_gaps_with_1_to_3_rects_no_max_size_and_no_overlap_tiles_container(
-        #[strategy(ContainedRects::arbitrary_with(NumRectsRange(1, 3)))] args: ContainedRects,
+        #[strategy(ContainedRects::arbitrary_with(ContainedRectsParams::from_len_range(1..=3)))]
+        args: ContainedRects,
     ) {
         prop_assume!(obscured_area(&args.rects) == 0);
         let mut rects = Array::from(args.rects);
@@ -579,7 +581,7 @@ mod tests {
     }
 
     impl Arbitrary for RemoveGapsArgs {
-        type Parameters = NumRectsRange;
+        type Parameters = ContainedRectsParams;
         type Strategy = BoxedStrategy<Self>;
 
         fn arbitrary_with(range: Self::Parameters) -> Self::Strategy {
