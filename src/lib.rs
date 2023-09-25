@@ -8,9 +8,15 @@ mod rect;
 #[cfg(test)]
 mod testing;
 
-use std::num::NonZeroUsize;
+use std::{
+    collections::hash_map::{Entry, HashMap},
+    num::NonZeroUsize,
+    sync::Arc,
+    thread,
+};
 
 use encoding::Decoder;
+use once_cell::sync::OnceCell;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 use post_processing::overlap_borders;
 use rand::prelude::*;
@@ -23,8 +29,13 @@ pub use crate::{
     rect::{Pos, Rect, Size},
 };
 
-#[derive(Clone, Debug)]
 pub struct LayoutGen {
+    inner: Arc<RawLayoutGen>,
+    cache: HashMap<Key, Arc<OnceCell<Vec<Rect>>>>,
+}
+
+#[derive(Clone, Debug)]
+struct RawLayoutGen {
     min_width: NonZeroUsize,
     min_height: NonZeroUsize,
     max_width: Option<NonZeroUsize>,
@@ -33,6 +44,14 @@ pub struct LayoutGen {
     weights: Weights,
     area_ratios: Vec<AreaRatio>,
     aspect_ratios: Vec<AspectRatio>,
+}
+
+type Key = (Size, usize);
+
+pub enum Status<'a> {
+    NotStarted,
+    Started,
+    Finished(&'a [Rect]),
 }
 
 impl LayoutGen {
@@ -48,18 +67,62 @@ impl LayoutGen {
         aspect_ratios: Vec<AspectRatio>,
     ) -> Self {
         Self {
-            min_width,
-            min_height,
-            max_width,
-            max_height,
-            overlap_borders_by,
-            weights,
-            area_ratios,
-            aspect_ratios,
+            inner: Arc::new(RawLayoutGen {
+                min_width,
+                min_height,
+                max_width,
+                max_height,
+                overlap_borders_by,
+                weights,
+                area_ratios,
+                aspect_ratios,
+            }),
+            cache: HashMap::new(),
         }
     }
 
-    pub fn layout(&self, container: Size, count: usize) -> Vec<Rect> {
+    pub fn try_layout(&self, container: Size, count: usize) -> Status {
+        match self.cache.get(&(container, count)) {
+            Some(cache_cell) => match cache_cell.get() {
+                Some(layout) => Status::Finished(layout),
+                None => Status::Started,
+            },
+            None => Status::NotStarted,
+        }
+    }
+
+    pub fn layout<F>(&mut self, container: Size, count: usize, callback: F)
+    where
+        F: FnOnce(&[Rect]) + Send + 'static,
+    {
+        let key = (container, count);
+        match self.cache.entry(key) {
+            Entry::Vacant(entry) => {
+                let cache_cell = Arc::clone(entry.insert(Arc::new(OnceCell::new())));
+                let gen = Arc::clone(&self.inner);
+                thread::spawn(move || {
+                    let layout = gen.layout(container, count);
+                    let layout = cache_cell
+                        .try_insert(layout)
+                        .expect("cell should be unset for {key:?}");
+                    (callback)(layout)
+                });
+            }
+            Entry::Occupied(entry) => {
+                let cache_cell = entry.get();
+                if let Some(layout) = cache_cell.get() {
+                    (callback)(layout)
+                } else {
+                    let cache_cell = Arc::clone(cache_cell);
+                    thread::spawn(move || (callback)(cache_cell.wait()));
+                }
+            }
+        }
+    }
+}
+
+impl RawLayoutGen {
+    fn layout(&self, container: Size, count: usize) -> Vec<Rect> {
         let max_size = Size::new(
             self.max_width
                 .map_or(container.width, |x| x.min(container.width)),

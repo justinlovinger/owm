@@ -1,12 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use clap::Parser;
-use once_cell::sync::Lazy;
-use owm::{AreaRatio, AspectRatio, LayoutGen, Rect, Size, Weight, Weights};
+use owm::{AreaRatio, AspectRatio, LayoutGen, Size, Status, Weight, Weights};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
@@ -304,21 +301,14 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                 tags: _,
                 serial,
             } => {
-                type Key = (Size, usize);
-                static CACHE: Lazy<Mutex<HashMap<Key, Vec<Rect>>>> =
-                    Lazy::new(|| Mutex::new(HashMap::new()));
-                static STARTED: Lazy<Mutex<HashSet<Key>>> =
-                    Lazy::new(|| Mutex::new(HashSet::new()));
-
                 let container = Size::new(
                     NonZeroUsize::new(usable_width as usize).expect("width should be non-zero"),
                     NonZeroUsize::new(usable_height as usize).expect("height should be non-zero"),
                 );
                 let view_count = view_count as usize;
-                let key = (container, view_count);
 
-                match CACHE.lock().unwrap().get(&key) {
-                    Some(layout) => {
+                match state.gen.try_layout(container, view_count) {
+                    Status::Finished(layout) => {
                         for rect in layout {
                             proxy.push_view_dimensions(
                                 rect.x() as i32,
@@ -330,35 +320,29 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                         }
                         proxy.commit("owm".to_owned(), serial);
                     }
-                    None => {
-                        if STARTED.lock().unwrap().insert(key) {
-                            let gen = state.gen.clone();
-                            let control = Arc::clone(
-                                state
-                                    .control
-                                    .as_ref()
-                                    .expect("River control should be initialized"),
-                            );
-                            let seat = Arc::clone(
-                                state.seat.as_ref().expect("seat should be initialized"),
-                            );
-                            let qhandle = qhandle.clone();
-                            let conn = conn.clone();
-                            thread::spawn(move || {
-                                let layout = gen.layout(container, view_count);
-                                CACHE.lock().unwrap().insert(key, layout);
-
-                                // River will send a new layout demand
-                                // if it receives a layout command.
-                                let control = control.lock().unwrap();
-                                control.add_argument("send-layout-cmd".to_owned());
-                                control.add_argument("owm".to_owned());
-                                control.add_argument("retry-layout".to_owned());
-                                control.run_command(&seat, &qhandle, ());
-                                let _ = conn.flush();
-                            });
-                        }
+                    Status::NotStarted => {
+                        let control = Arc::clone(
+                            state
+                                .control
+                                .as_ref()
+                                .expect("River control should be initialized"),
+                        );
+                        let seat =
+                            Arc::clone(state.seat.as_ref().expect("seat should be initialized"));
+                        let qhandle = qhandle.clone();
+                        let conn = conn.clone();
+                        state.gen.layout(container, view_count, move |_| {
+                            // River will send a new layout demand
+                            // if it receives a layout command.
+                            let control = control.lock().unwrap();
+                            control.add_argument("send-layout-cmd".to_owned());
+                            control.add_argument("owm".to_owned());
+                            control.add_argument("retry-layout".to_owned());
+                            control.run_command(&seat, &qhandle, ());
+                            let _ = conn.flush();
+                        });
                     }
+                    Status::Started => {}
                 }
             }
             river_layout_v3::Event::NamespaceInUse => {
