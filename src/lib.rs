@@ -107,11 +107,15 @@ impl LayoutGen {
         count: usize,
         callback: Box<dyn FnOnce(&[Rect]) + Send + 'static>,
     ) {
-        if count == 0 {
-            return (callback)(&[]);
-        }
-
         let key = (container, count);
+        if count == 0 {
+            return (callback)(
+                self.cache
+                    .entry(key)
+                    .or_insert(Arc::new(OnceCell::new()))
+                    .get_or_init(Vec::new),
+            );
+        }
         match self.cache.entry(key) {
             Entry::Vacant(entry) => {
                 let cache_cell = Arc::clone(entry.insert(Arc::new(OnceCell::new())));
