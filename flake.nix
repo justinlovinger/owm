@@ -22,6 +22,7 @@
         defaultPackage = naersk-lib.buildPackage {
           src = ./.;
           doCheck = true;
+          cargoTestOptions = xs: xs ++ [ "--all" ];
         };
         devShell =
           with pkgs;

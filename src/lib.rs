@@ -1,13 +1,3 @@
-mod binary;
-mod derive;
-mod encoding;
-mod objective;
-mod post_processing;
-mod rect;
-
-#[cfg(test)]
-mod testing;
-
 use std::{
     collections::hash_map::{Entry, HashMap},
     num::NonZeroUsize,
@@ -15,19 +5,15 @@ use std::{
     thread,
 };
 
-use encoding::Decoder;
 use once_cell::sync::OnceCell;
 use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
-use post_processing::overlap_borders;
+use owm_problem::{
+    encoding::Decoder, objective::Problem, post_processing::overlap_borders, AreaRatio,
+    AspectRatio, Rect, Size, Weights,
+};
 use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
 use rayon::prelude::*;
-
-use crate::objective::Problem;
-pub use crate::{
-    objective::{AreaRatio, AspectRatio, Weight, Weights},
-    rect::{Pos, Rect, Size},
-};
 
 #[derive(Debug)]
 pub struct LayoutGen {

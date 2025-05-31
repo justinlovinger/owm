@@ -3,7 +3,8 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
-use owm::{AreaRatio, AspectRatio, LayoutGen, Size, Status, Weight, Weights};
+use owm::{LayoutGen, Status};
+use owm_problem::{AreaRatio, AspectRatio, Size, Weight, Weights};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::Connection;
 use wayland_client::{
