@@ -1,11 +1,10 @@
 use std::num::NonZeroUsize;
 
 use itertools::Itertools;
-use ndarray::prelude::*;
 
 use crate::rect::{RangeExclusive, Rect, Size};
 
-pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
+pub fn trim_outside(container: Size, rects: &mut [Rect]) {
     for rect in rects.iter_mut() {
         rect.size.width =
             NonZeroUsize::new(rect.width().get().min(container.width.get() - rect.x()))
@@ -16,7 +15,7 @@ pub fn trim_outside(container: Size, mut rects: ArrayViewMut1<Rect>) {
     }
 }
 
-pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rect>) {
+pub fn remove_gaps(max_size: Size, container: Size, rects: &mut [Rect]) {
     debug_assert!(max_size.width <= container.width);
     debug_assert!(max_size.height <= container.height);
 
@@ -238,7 +237,7 @@ pub fn remove_gaps(max_size: Size, container: Size, mut rects: ArrayViewMut1<Rec
     }
 }
 
-pub fn overlap_borders(border_thickness: usize, container: Size, mut rects: ArrayViewMut1<Rect>) {
+pub fn overlap_borders(border_thickness: usize, container: Size, rects: &mut [Rect]) {
     let border_thickness_half_ceil = div_ceil(border_thickness, 2);
     let border_thickness_half = border_thickness / 2;
 
@@ -437,19 +436,19 @@ mod tests {
     #[test]
     fn remove_gaps_expands_at_same_rate() {
         let container = Size::new_checked(10, 10);
-        let mut rects = arr1(&[
+        let mut rects = [
             Rect::new_checked(2, 2, 6, 1),
             Rect::new_checked(2, 7, 1, 1),
             Rect::new_checked(7, 7, 1, 1),
-        ]);
-        remove_gaps(container, container, rects.view_mut());
+        ];
+        remove_gaps(container, container, &mut rects);
         assert_eq!(
             rects,
-            arr1(&[
+            [
                 Rect::new_checked(0, 0, 10, 5),
                 Rect::new_checked(0, 5, 5, 5),
                 Rect::new_checked(5, 5, 5, 5),
-            ]),
+            ],
         )
     }
 
@@ -468,12 +467,9 @@ mod tests {
         #[strategy(ContainedRects::arbitrary_with(ContainedRectsParams::from_len_range(1..=3)))]
         args: ContainedRects,
     ) {
-        let mut rects = Array::from(args.rects);
-        remove_gaps(args.container, args.container, rects.view_mut());
-        prop_assert_eq!(
-            covered_area(rects.as_slice().unwrap()),
-            args.container.area()
-        )
+        let mut rects = args.rects;
+        remove_gaps(args.container, args.container, &mut rects);
+        prop_assert_eq!(covered_area(&rects), args.container.area())
     }
 
     #[ignore = "fails when corners touch"]
@@ -484,8 +480,8 @@ mod tests {
         args: ContainedRects,
     ) {
         prop_assume!(obscured_area(&args.rects) == 0);
-        let mut rects = Array::from(args.rects);
-        remove_gaps(args.container, args.container, rects.view_mut());
+        let mut rects = args.rects;
+        remove_gaps(args.container, args.container, &mut rects);
         prop_assert_eq!(
             rects.into_iter().map(|x| x.area().get()).sum::<usize>(),
             args.container.area().get()
@@ -496,15 +492,15 @@ mod tests {
     #[proptest(max_global_rejects = 65536)]
     fn remove_gaps_does_not_make_rects_overlap_if_they_did_not_already(args: RemoveGapsArgs) {
         prop_assume!(obscured_area(&args.rects) == 0);
-        let mut rects = Array::from(args.rects);
-        remove_gaps(args.max_size, args.container, rects.view_mut());
-        prop_assert_eq!(obscured_area(rects.as_slice().unwrap()), 0)
+        let mut rects = args.rects;
+        remove_gaps(args.max_size, args.container, &mut rects);
+        prop_assert_eq!(obscured_area(&rects), 0)
     }
 
     #[proptest]
     fn remove_gaps_respects_max_size(args: RemoveGapsArgs) {
-        let mut rects = Array::from(args.rects);
-        remove_gaps(args.max_size, args.container, rects.view_mut());
+        let mut rects = args.rects;
+        remove_gaps(args.max_size, args.container, &mut rects);
         for rect in rects {
             prop_assert!(rect.width() <= args.max_size.width);
             prop_assert!(rect.height() <= args.max_size.height);
@@ -517,46 +513,46 @@ mod tests {
         container: Size,
     ) {
         let init = [Rect::new(0, 0, container.width, container.height)];
-        let mut rects = arr1(&init);
-        overlap_borders(border_thickness, container, rects.view_mut());
-        assert_eq!(rects.into_raw_vec(), init)
+        let mut rects = init;
+        overlap_borders(border_thickness, container, &mut rects);
+        assert_eq!(rects, init)
     }
 
     #[test]
     fn overlap_borders_expands_evenly() {
         let container = Size::new_checked(10, 10);
-        let mut rects = arr1(&[
+        let mut rects = [
             Rect::new_checked(0, 0, 10, 5),
             Rect::new_checked(0, 5, 5, 5),
             Rect::new_checked(5, 5, 5, 5),
-        ]);
-        overlap_borders(2, container, rects.view_mut());
+        ];
+        overlap_borders(2, container, &mut rects);
         assert_eq!(
             rects,
-            arr1(&[
+            [
                 Rect::new_checked(0, 0, 10, 6),
                 Rect::new_checked(0, 4, 6, 6),
                 Rect::new_checked(4, 4, 6, 6),
-            ]),
+            ],
         )
     }
 
     #[test]
     fn overlap_borders_breaks_ties_in_favor_of_first() {
         let container = Size::new_checked(10, 10);
-        let mut rects = arr1(&[
+        let mut rects = [
             Rect::new_checked(0, 0, 10, 5),
             Rect::new_checked(0, 5, 5, 5),
             Rect::new_checked(5, 5, 5, 5),
-        ]);
-        overlap_borders(1, container, rects.view_mut());
+        ];
+        overlap_borders(1, container, &mut rects);
         assert_eq!(
             rects,
-            arr1(&[
+            [
                 Rect::new_checked(0, 0, 10, 6),
                 Rect::new_checked(0, 5, 6, 5),
                 Rect::new_checked(5, 5, 5, 5),
-            ]),
+            ],
         )
     }
 

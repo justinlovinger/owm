@@ -103,8 +103,8 @@ impl Decoder {
                 )
             });
         for mut rects in rects.axis_iter_mut(Axis(0)) {
-            trim_outside(self.container, rects.view_mut());
-            remove_gaps(self.max_size, self.container, rects.view_mut());
+            trim_outside(self.container, rects.as_slice_mut().unwrap());
+            remove_gaps(self.max_size, self.container, rects.as_slice_mut().unwrap());
         }
         rects
     }

@@ -160,39 +160,43 @@ impl RawLayoutGen {
             container,
             prev_layout,
         );
-        let mut rects = decoder.decode1(
-            UntilConvergedConfig {
-                threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
-            }
-            .argmin(
-                &mut Config {
-                    num_samples: NumSamples::new(
-                        500 * std::thread::available_parallelism().map_or(1, |x| x.into()),
-                    )
-                    .unwrap(),
-                    adjust_rate: AdjustRate::new(0.1).unwrap(),
-                    mutation_chance: MutationChance::new(0.0).unwrap(),
-                    mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
+        let mut rects = decoder
+            .decode1(
+                UntilConvergedConfig {
+                    threshold: ProbabilityThreshold::new(Probability::new(0.9).unwrap()).unwrap(),
                 }
-                .start_using(
-                    decoder.bits(),
-                    |points| {
-                        (0..points.nrows())
-                            .into_par_iter()
-                            .map(|i| {
-                                problem.evaluate(decoder.decode1(points.row(i)).as_slice().unwrap())
-                            })
-                            .collect::<Vec<_>>()
-                            .into()
-                    },
-                    &mut SplitMix64::seed_from_u64(0),
-                ),
+                .argmin(
+                    &mut Config {
+                        num_samples: NumSamples::new(
+                            500 * std::thread::available_parallelism().map_or(1, |x| x.into()),
+                        )
+                        .unwrap(),
+                        adjust_rate: AdjustRate::new(0.1).unwrap(),
+                        mutation_chance: MutationChance::new(0.0).unwrap(),
+                        mutation_adjust_rate: MutationAdjustRate::new(0.05).unwrap(),
+                    }
+                    .start_using(
+                        decoder.bits(),
+                        |points| {
+                            (0..points.nrows())
+                                .into_par_iter()
+                                .map(|i| {
+                                    problem.evaluate(
+                                        decoder.decode1(points.row(i)).as_slice().unwrap(),
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .into()
+                        },
+                        &mut SplitMix64::seed_from_u64(0),
+                    ),
+                )
+                .view(),
             )
-            .view(),
-        );
+            .into_raw_vec();
         if self.overlap_borders_by > 0 {
-            overlap_borders(self.overlap_borders_by, container, rects.view_mut());
+            overlap_borders(self.overlap_borders_by, container, &mut rects);
         }
-        rects.into_raw_vec()
+        rects
     }
 }
