@@ -226,7 +226,7 @@ impl From<Size> for Pos {
 // <https://www.codewars.com/kata/reviews/6380bc55c34ac10001dde712/groups/63b6d7c8ec0d060001ce20f1>.
 // This could be optimized using segment trees.
 /// Return the total area of a union of rectangles.
-pub fn covered_area(rects: &[Rect]) -> NonZeroUsize {
+pub fn covered_area(rects: &[Rect]) -> usize {
     let mut xs = rects
         .iter()
         .flat_map(|rect| [rect.left(), rect.right()])
@@ -237,8 +237,7 @@ pub fn covered_area(rects: &[Rect]) -> NonZeroUsize {
     let mut rects = rects.to_vec();
     rects.sort_by_key(|rect| rect.top());
 
-    let area = xs
-        .into_iter()
+    xs.into_iter()
         .tuple_windows()
         .map(|(left, right)| {
             let width = right - left;
@@ -253,10 +252,7 @@ pub fn covered_area(rects: &[Rect]) -> NonZeroUsize {
                 })
                 .sum::<usize>()
         })
-        .sum();
-    // Covered area cannot be zero
-    // because area of rectangles are not zero.
-    unsafe { NonZeroUsize::new_unchecked(area) }
+        .sum()
 }
 
 /// Return the total area obscured in a set of rectangles.
@@ -279,11 +275,8 @@ pub fn obscured_area(rects: &[Rect]) -> usize {
                     .collect_vec()
             })
             .collect_vec();
-        overlaps
-            .iter()
-            .map(|x| covered_area(x).get())
-            .sum::<usize>()
-            - covered_area(&overlaps.into_iter().flatten().collect_vec()).get()
+        overlaps.iter().map(|x| covered_area(x)).sum::<usize>()
+            - covered_area(&overlaps.into_iter().flatten().collect_vec())
     }
 }
 
@@ -318,7 +311,22 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
+    use crate::testing::{ContainedRects, ContainedRectsParams};
+
     use super::*;
+
+    #[test]
+    fn covered_area_is_zero_if_no_rects() {
+        assert!(covered_area(&[]) == 0)
+    }
+
+    #[proptest]
+    fn covered_area_is_non_zero_if_rects(
+        #[strategy(ContainedRects::arbitrary_with(ContainedRectsParams::from_len_range(1..=16)))]
+        rects: ContainedRects,
+    ) {
+        prop_assert!(covered_area(&rects.rects) > 0)
+    }
 
     #[test]
     fn range_exclusive_intersects_works_for_simple_cases() {

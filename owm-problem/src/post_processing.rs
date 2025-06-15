@@ -469,7 +469,7 @@ mod tests {
     ) {
         let mut rects = args.rects;
         remove_gaps(args.container, args.container, &mut rects);
-        prop_assert_eq!(covered_area(&rects), args.container.area())
+        prop_assert_eq!(covered_area(&rects), args.container.area().get())
     }
 
     #[ignore = "fails when corners touch"]

@@ -23,7 +23,7 @@ impl MinimizeGaps {
             // Worst case can theoretically be zero,
             // if `container.area()` is `1`,
             // but this is unrealistic in practice.
-            (self.area.get() - covered_area(rects).get()) as f64 / self.worst_case
+            (self.area.get() - covered_area(rects)) as f64 / self.worst_case
         }
     }
 }
