@@ -326,9 +326,12 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                                 serial,
                             );
                         }
-                        proxy.commit("owm".to_owned(), serial);
+                        proxy.commit(state.namespace.clone(), serial);
                     }
                     Status::NotStarted => {
+                        // River ignores layouts that take longer than 100 ms to generate,
+                        // <https://github.com/riverwm/river/blob/c16628c7f57c51d50f2d10a96c265fb0afaddb02/river/LayoutDemand.zig#L37>.
+                        let namespace = state.namespace.clone();
                         let control = Arc::clone(
                             state
                                 .control
@@ -344,7 +347,7 @@ impl Dispatch<RiverLayoutV3, OutputId> for LayoutManager {
                             // if it receives a layout command.
                             let control = control.lock().unwrap();
                             control.add_argument("send-layout-cmd".to_owned());
-                            control.add_argument("owm".to_owned());
+                            control.add_argument(namespace);
                             control.add_argument("retry-layout".to_owned());
                             control.run_command(&seat, &qhandle, ());
                             let _ = conn.flush();
