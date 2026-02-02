@@ -20,7 +20,7 @@
         system:
         import nixpkgs {
           inherit system;
-          overlays = [ naersk.overlay ];
+          overlays = [ naersk.overlays.default ];
         }
       );
       eachSystem = nixpkgs.lib.genAttrs (import systems);
