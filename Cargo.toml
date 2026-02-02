@@ -25,7 +25,7 @@ opt-level = 0
 [dependencies]
 clap = { version = "4.3.21", features = ["derive"] }
 once_cell = "1.18.0"
-optimal = { git = "https://github.com/justinlovinger/optimal-rs.git" }
+optimal = { git = "https://github.com/justinlovinger/optimal-rs.git", branch = "master" }
 owm-problem = { path = "owm-problem", version = "0.1.0" }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
